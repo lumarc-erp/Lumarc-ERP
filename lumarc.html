@@ -5236,6 +5236,13 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         <input type="text" id="g-tax-obs" placeholder="Ex: Simples Nacional">
       </div>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-top:14px">
+      <div class="form-group">
+        <label>% Margem Global Mínima (piso)</label>
+        <div class="ip-group"><span class="ip-pre">%</span><input type="number" id="g-margem-global-min" value="19" min="0" max="100" step="0.1" oninput="recalcAllItems()"></div>
+        <small style="font-size:10px;color:var(--muted)">Resultado econômico mínimo por item — abaixo disso, o preço é elevado automaticamente pra proteger a operação.</small>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -7041,10 +7048,11 @@ function buildItemCardHTML(item, cfg, open) {
         </select>
       </div>
       <div class="form-group"><label>Complexidade</label>
-        <select id="item-${item.id}-compl" onchange="updateItemField(${item.id},'compl',this.value)">
+        <select id="item-${item.id}-compl" onchange="updateItemField(${item.id},'compl',this.value); updateItemPricing(${item.id});">
           <option value="baixa"${item.compl==='baixa'?' selected':''}>Baixa</option>
           <option value="media"${item.compl==='media'?' selected':''}>Média</option>
           <option value="alta"${item.compl==='alta'?' selected':''}>Alta</option>
+          <option value="especial"${item.compl==='especial'?' selected':''}>Especial</option>
         </select>
       </div>
       <div class="form-group"><label>Urgência</label>
@@ -7131,6 +7139,7 @@ function buildItemCardHTML(item, cfg, open) {
           <input type="text" id="item-${item.id}-marg-real" readonly style="font-family:var(--mono);font-weight:700">
         </div>
       </div>
+      <div id="item-${item.id}-piso-info" style="font-size:11px;margin-top:6px"></div>
     </div>
 
     
@@ -7657,6 +7666,16 @@ function calcItemTotals(itemId) {
   item.custoDa    = da;
   item.custoTotal = dir + ind + da;
 
+  // Custos granulares por bloco, usados pela formação de preço por
+  // metodologia (matéria-prima / produção própria / terceirização /
+  // reembolso tratados separadamente) — não substitui os campos acima,
+  // que continuam representando a visão de custo bruto do item.
+  item.custoMP = mp;
+  item.custoProducaoPropria = mo + maq; // MO + Máquinas
+  const daSplit = sumItemTableDASplit(itemId);
+  item.custoDATerceirizacao = daSplit.terceirizacao;
+  item.custoDAOutras        = daSplit.outras;
+
   const totEl = g(`item-${itemId}-mp-tot`);   if(totEl) totEl.textContent = fmt(mp);
   const moTot = g(`item-${itemId}-mo-tot`);   if(moTot) moTot.textContent = fmt(mo);
   const maTot = g(`item-${itemId}-maq-tot`);  if(maTot) maTot.textContent = fmt(maq);
@@ -7664,6 +7683,28 @@ function calcItemTotals(itemId) {
   const cdEl  = g(`item-${itemId}-custo-dir`);if(cdEl)  cdEl.value = fmt(item.custoTotal);
 
   updateItemPricing(itemId);
+}
+
+// Soma as linhas de Despesas Adicionais separando por categoria: as
+// marcadas como "Terceirização" (recebem o tratamento de terceiro na
+// formação de preço) das demais (Frete e outras — tratadas como
+// reembolso/pass-through, sem markup).
+function sumItemTableDASplit(itemId) {
+  let terceirizacao = 0, outras = 0;
+  const tbody = g(`item-${itemId}-da-body`);
+  if (!tbody) return { terceirizacao, outras };
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const catEl = tr.querySelector('[id$="-cat"]');
+    const totEl = tr.querySelector('[id$="-total"]');
+    if (!totEl) return;
+    const raw = totEl.dataset.value !== undefined
+      ? parseFloat(totEl.dataset.value)
+      : parseFloat((totEl.textContent||'').replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.'));
+    if (isNaN(raw)) return;
+    if (catEl && catEl.value === 'Terceirização') terceirizacao += raw;
+    else outras += raw;
+  });
+  return { terceirizacao, outras };
 }
 
 
@@ -8601,14 +8642,102 @@ function getItemTaxPct(tipo) {
   return tipo === 'venda' ? 0.19 : 0.03;
 }
 
+// Tabela de parâmetros por classificação — usada pela nova formação de
+// preço (matéria-prima recebe 1/3 do resultado, produção própria recebe
+// overhead+resultado integral, terceiros recebem metade do resultado).
+// O overhead-base (nível Baixa) vem do "% Custo Indireto Calculado" real
+// da empresa (Despesas Fixas + MO indireta + Máquinas indiretas ÷
+// faturamento médio) — acompanha a realidade financeira automaticamente,
+// em vez de uma tabela fixa. Médio soma +5%, Alta e Especial somam +10%.
+function _getOverheadBase() {
+  return (DB.config && DB.config.indPctPadrao != null)
+    ? DB.config.indPctPadrao / 100
+    : (parseFloat(g('g-ind-pct')?.value) || 20) / 100;
+}
+function getNivelPrecificacao(compl) {
+  const overheadBase = _getOverheadBase();
+  const NIVEIS = {
+    baixa:    { overheadAdd: 0,    resultado: 0.19, risco: 0.00, admMP: 0.08, admTER: 0.10 },
+    media:    { overheadAdd: 0.05, resultado: 0.31, risco: 0.05, admMP: 0.12, admTER: 0.15 },
+    alta:     { overheadAdd: 0.10, resultado: 0.35, risco: 0.10, admMP: 0.15, admTER: 0.20 },
+    especial: { overheadAdd: 0.10, resultado: 0.50, risco: 0.10, admMP: 0.15, admTER: 0.20 },
+  };
+  const n = NIVEIS[compl] || NIVEIS.media;
+  return {
+    overhead: overheadBase + n.overheadAdd,
+    resultado: n.resultado,
+    risco: n.risco,
+    admMP: n.admMP,
+    admTER: n.admTER,
+  };
+}
+
 function updateItemPricing(itemId) {
   const item = orcItems.find(it => it.id === itemId);
   if (!item) return;
+  // Mantido por compatibilidade (campo ainda existe na tela), mas a nova
+  // metodologia não usa mais uma margem única global — cada bloco de
+  // custo (material/produção própria/terceiros) tem seu próprio
+  // tratamento, definido pela classificação do item.
   const margPct = parseFloat(g(`item-${itemId}-marg`)?.value)||item.margPct||30;
   item.margPct = margPct;
+
   const taxPct = getItemTaxPct(item.tipo);
-  const div = 1 - margPct/100 - taxPct;
-  const pSug = div > 0 ? item.custoTotal / div : item.custoTotal * 2;
+  const compl = item.compl || 'media';
+  const nivel = getNivelPrecificacao(compl);
+
+  const MP  = item.custoMP || 0;
+  const PP  = item.custoProducaoPropria || 0;   // MO + Máquinas
+  const TER = item.custoDATerceirizacao || 0;
+  const REEMB = item.custoDAOutras || 0;
+
+  // --- Matéria-Prima: ADM própria + 1/3 do resultado ---
+  const baseMP = MP * (1 + nivel.admMP);
+  const resultadoMP = nivel.resultado / 3;
+  const valorMP = MP > 0 ? baseMP / (1 - resultadoMP) : 0;
+
+  // --- Produção Própria (MO+MAQ): risco, depois overhead como markup,
+  //     depois resultado integral como margem ---
+  const risco = PP * nivel.risco;
+  const baseProducao = PP + risco;
+  const baseComOverhead = baseProducao * (1 + nivel.overhead);
+  const valorProducao = PP > 0 ? baseComOverhead / (1 - nivel.resultado) : 0;
+
+  // --- Terceirização: ADM própria + metade do resultado ---
+  const baseTER = TER * (1 + nivel.admTER);
+  const resultadoTER = nivel.resultado / 2;
+  const valorTER = TER > 0 ? baseTER / (1 - resultadoTER) : 0;
+
+  // --- Reembolso/Frete: sem markup ---
+  const valorReembolso = REEMB;
+
+  const valorEconomicoTotal = valorMP + valorProducao + valorTER + valorReembolso;
+  const precoCalculado = taxPct < 1 ? valorEconomicoTotal / (1 - taxPct) : valorEconomicoTotal * 2;
+
+  // --- Piso de Resultado Global (19% por padrão, configurável) ---
+  const basePreservada = baseMP + baseComOverhead + baseTER + valorReembolso;
+  const resultadoGlobalRS = valorEconomicoTotal - basePreservada;
+  const margemGlobal = precoCalculado > 0 ? resultadoGlobalRS / precoCalculado : 0;
+  const margemGlobalMin = (parseFloat(g('g-margem-global-min')?.value) || 19) / 100;
+
+  let pisoAplicado = false, precoFinal2 = precoCalculado, precoPiso = null;
+  if (margemGlobal < margemGlobalMin && taxPct + margemGlobalMin < 1) {
+    precoPiso = basePreservada / (1 - taxPct - margemGlobalMin);
+    if (precoPiso > precoCalculado) { precoFinal2 = precoPiso; pisoAplicado = true; }
+  }
+
+  // Guarda tudo pra transparência/exibição
+  item.overheadPct = nivel.overhead * 100;
+  item.resultadoPct = nivel.resultado * 100;
+  item.valorEconomicoTotal = valorEconomicoTotal;
+  item.basePreservada = basePreservada;
+  item.resultadoGlobalRS = resultadoGlobalRS;
+  item.margemGlobalPct = margemGlobal * 100;
+  item.pisoAplicado = pisoAplicado;
+  item.precoAntesPiso = precoCalculado;
+  item.precoPisoCalculado = precoPiso;
+
+  const pSug = precoFinal2;
 
   const pSugEl = g(`item-${itemId}-psug`);
   if (pSugEl) pSugEl.value = fmt(pSug);
@@ -8630,6 +8759,24 @@ function updateItemPricing(itemId) {
     pfEl.dataset.lastSug = pSug.toFixed(2);
   }
   calcItemMargem(itemId);
+  atualizarIndicadorPiso(itemId);
+}
+
+// Mostra, no card do item, se o piso de resultado global foi acionado —
+// reaproveita a área de exibição já existente (composição de custos), sem
+// criar tela nova.
+function atualizarIndicadorPiso(itemId) {
+  const item = orcItems.find(it => it.id === itemId);
+  if (!item) return;
+  const el = g(`item-${itemId}-piso-info`);
+  if (!el) return;
+  if (item.pisoAplicado) {
+    el.innerHTML = `⚠️ Piso de resultado aplicado (${fmtP(parseFloat(g('g-margem-global-min')?.value)||19)}) — preço elevado de ${fmt(item.precoAntesPiso)} para ${fmt(item.precoPisoCalculado)}`;
+    el.style.color = 'var(--orange)';
+  } else {
+    el.innerHTML = `✅ Piso de resultado: não aplicado (margem global ${fmtP(item.margemGlobalPct||0)})`;
+    el.style.color = 'var(--muted)';
+  }
 }
 
 function updateItemFinalPrice(itemId) {
@@ -9103,7 +9250,7 @@ function saveAll(silent) {
   const orcData = {};
   ['o-num','o-data','o-resp','o-status','o-tipo','o-prazo','o-pgto','o-obs',
    'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade',
-   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs',
+   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs','g-margem-global-min',
    'orc-cnpj-busca'].forEach(id => { const el = g(id); if(el) orcData[id] = el.value; });
   // Save items array
   orcData._orcItems = JSON.stringify(orcItems);
@@ -9401,7 +9548,7 @@ function applyLoadedData(save, skipOrcData) {
     // Restore simple fields
     ['o-num','o-data','o-resp','o-status','o-tipo','o-prazo','o-pgto','o-obs',
      'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade',
-     'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs'].forEach(id => {
+     'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs','g-margem-global-min'].forEach(id => {
       const el = g(id); if (el && d[id] !== undefined) el.value = d[id];
     });
 
@@ -10186,14 +10333,17 @@ function calcMaqCusto() {
   const custoMes = deprec + man + energia;
   const custoHora = hprod > 0 ? custoMes / hprod : 0;
 
-  g('mm-breakdown').innerHTML = `
-    <div>Depreciação mensal</div><div style="font-family:var(--mono);font-weight:600;text-align:right">${fmt(deprec)}</div>
-    <div>Manutenção mensal</div><div style="font-family:var(--mono);text-align:right">${fmt(man)}</div>
-    <div>Energia (${kw}kW × ${hprod}h × R$${tarifa}/kWh × 1,2)</div><div style="font-family:var(--mono);text-align:right">${fmt(energia)}</div>
-    <div style="color:var(--muted);font-size:10px">÷ ${hprod}h produtivas/mês</div><div></div>
-  `;
-  g('mm-custo-mes').textContent = fmt(custoMes);
-  g('mm-custo-hora').textContent = fmt(custoHora);
+  const bd = g('mm-breakdown');
+  if (bd) {
+    bd.innerHTML = `
+      <div>Depreciação mensal</div><div style="font-family:var(--mono);font-weight:600;text-align:right">${fmt(deprec)}</div>
+      <div>Manutenção mensal</div><div style="font-family:var(--mono);text-align:right">${fmt(man)}</div>
+      <div>Energia (${kw}kW × ${hprod}h × R$${tarifa}/kWh × 1,2)</div><div style="font-family:var(--mono);text-align:right">${fmt(energia)}</div>
+      <div style="color:var(--muted);font-size:10px">÷ ${hprod}h produtivas/mês</div><div></div>
+    `;
+  }
+  if (g('mm-custo-mes'))  g('mm-custo-mes').textContent  = fmt(custoMes);
+  if (g('mm-custo-hora')) g('mm-custo-hora').textContent = fmt(custoHora);
   return { custoMes, custoHora, deprec, man, energia };
 }
 
@@ -16951,7 +17101,7 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // sessões de trabalho longas), mas ainda capaz de pegar desatualização de
 // verdade, que nos casos reais já vistos sempre foi de dias, nunca só
 // poucas horas.
-const APP_BUILD_VERSION = '2026-08-04T15:00:00Z';
+const APP_BUILD_VERSION = '2026-08-11T20:00:00Z';
 
 // Compara esta build com o commit mais recente publicado no GitHub. Só
 // acende o aviso se o remoto for pelo menos 3 horas mais novo. Falha
@@ -17506,6 +17656,26 @@ function backfillUpdatedAtPCeOS() {
   localStorage.setItem('lumarc_backfill_pcos_v1_done', '1');
 }
 
+// Corrige máquinas salvas com o valor antigo/errado de tipo de uso
+// ('direto'/'indireto', sem o 'a' final) — o resto do sistema (cálculo de
+// custo indireto, lista de máquinas disponíveis no orçamento) sempre
+// esperou 'direta'/'indireta'. Sem essa correção, máquinas com o valor
+// antigo ficavam invisíveis nos orçamentos e nunca contavam corretamente
+// como indiretas.
+function backfillTipoUsoMaquinas() {
+  if (localStorage.getItem('lumarc_backfill_tipouso_v1_done')) return;
+  var corrigidos = 0;
+  (DB.maquinas || []).forEach(function(m) {
+    if (m.tipoUso === 'direto')   { m.tipoUso = 'direta';   corrigidos++; }
+    if (m.tipoUso === 'indireto') { m.tipoUso = 'indireta'; corrigidos++; }
+  });
+  if (corrigidos > 0) {
+    console.log('[Backfill Tipo Uso] ' + corrigidos + ' máquina(s) corrigida(s).');
+    saveAll(true);
+  }
+  localStorage.setItem('lumarc_backfill_tipouso_v1_done', '1');
+}
+
 // ── IDENTIFICADOR ÚNICO DE SESSÃO/MÁQUINA ───────────────────────────────
 // Usado para o sistema reconhecer "isso fui eu que enviei" ao sincronizar,
 // e não reaplicar de volta o próprio envio. ANTES isso usava
@@ -17668,7 +17838,7 @@ function buildSavePayload() {
   const orcData = {};
   ['o-num','o-data','o-resp','o-status','o-tipo','o-prazo','o-pgto','o-obs',
    'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade',
-   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs'].forEach(id => {
+   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs','g-margem-global-min'].forEach(id => {
     const el = g(id); if(el) orcData[id] = el.value;
   });
   orcData._orcItems     = JSON.stringify(orcItems);
@@ -19273,6 +19443,7 @@ function limparDuplicatasFolha() {
 
   _bootSeguroAposCloud(backfillUpdatedAtOrcamentos, 'backfillUpdatedAtOrcamentos');
   _bootSeguroAposCloud(backfillUpdatedAtPCeOS, 'backfillUpdatedAtPCeOS');
+  _bootSeguroAposCloud(backfillTipoUsoMaquinas, 'backfillTipoUsoMaquinas');
   _bootSeguroAposCloud(migrarFotosParaBinSeparado, 'migrarFotosParaBinSeparado');
   _bootSeguroAposCloud(migrarStatusOrcLegado, 'migrarStatusOrcLegado');
   _bootSeguro(_iniciarRascunhoAutoSave, '_iniciarRascunhoAutoSave');
@@ -20511,7 +20682,7 @@ function capturarEstadoOrc() {
   var fields = {};
   ['o-num','o-data','o-resp','o-status','o-tipo','o-prazo','o-pgto','o-obs',
    'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade',
-   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs'].forEach(function(id) {
+   'g-ind-pct','g-tax-iss','g-tax-icms','g-tax-obs','g-margem-global-min'].forEach(function(id) {
     var el = g(id);
     if (el) fields[id] = el.value;
   });
@@ -31702,10 +31873,20 @@ function baixarCombinacao(idxList) {
         <div class="form-group"><label>Vida útil (anos)</label><input type="number" id="mm-vida" placeholder="10"></div>
         <div class="form-group"><label>Tarifa energia (R$/kWh)</label><input type="number" id="mm-tarifa" placeholder="0.75" step="0.01"></div>
         <div class="form-group"><label>Tipo de uso</label>
-          <select id="mm-tipo-uso"><option value="direto">Direto (produção)</option><option value="indireto">Indireto (apoio)</option></select>
+          <select id="mm-tipo-uso"><option value="direta">Direta (produção)</option><option value="indireta">Indireta (apoio)</option></select>
         </div>
         <div class="form-group"><label>Status</label>
           <select id="mm-status"><option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="manutencao">Em manutenção</option></select>
+        </div>
+      </div>
+      <hr class="div">
+      <div style="background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:14px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Composição do custo calculada</div>
+        <div id="mm-breakdown" style="font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+        <hr style="margin:10px 0;border:none;border-top:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;font-weight:700">
+          <div>Custo total/mês</div><div style="font-family:var(--mono);text-align:right" id="mm-custo-mes">R$ 0,00</div>
+          <div>Custo por hora</div><div style="font-family:var(--mono);text-align:right" id="mm-custo-hora">R$ 0,00</div>
         </div>
       </div>
     </div>

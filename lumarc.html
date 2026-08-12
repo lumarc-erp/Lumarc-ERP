@@ -6834,9 +6834,13 @@ function syncOrcItemsFromDOM() {
   });
 }
 
-function genOrcNum() {
+function genOrcNum(peek) {
   // Versão síncrona — usada apenas como fallback quando não há conexão ou
-  // para o número provisório mostrado imediatamente ao usuário.
+  // para o número provisório mostrado imediatamente ao usuário. Com
+  // peek=true, calcula o próximo número SEM gravar/avançar o contador —
+  // evita que o número provisório (que pode nunca ser usado, se o
+  // orçamento for limpo de novo antes de salvar) consuma uma numeração de
+  // verdade, deixando saltos no sequencial.
   if (!DB.config) DB.config = {};
   var lastSeq = parseInt(DB.config.orcSeq || 0);
   var localSeq = parseInt(localStorage.getItem('lumarc_seq') || 0);
@@ -6845,8 +6849,10 @@ function genOrcNum() {
     var m = o.num ? o.num.match(/(\d+)$/) : null;
     if (m) { var n = parseInt(m[1]); if (n >= seq) seq = n + 1; }
   });
-  DB.config.orcSeq = seq;
-  localStorage.setItem('lumarc_seq', seq);
+  if (!peek) {
+    DB.config.orcSeq = seq;
+    localStorage.setItem('lumarc_seq', seq);
+  }
   return 'ORC-' + new Date().getFullYear() + '-' + String(seq).padStart(4,'0');
 }
 
@@ -8991,7 +8997,7 @@ function clearOrc(force) {
   // logo em seguida com a nuvem — evita que dois usuários criando um
   // orçamento ao mesmo tempo recebam o mesmo número (cada um só enxergando
   // seu próprio estado local não sincronizado ainda).
-  var _numProvisorio = genOrcNum();
+  var _numProvisorio = genOrcNum(true);
   g('o-num').value = _numProvisorio;
   genOrcNumSeguro().then(function(numConfirmado) {
     if (g('o-num') && g('o-num').value === _numProvisorio) {
@@ -17107,7 +17113,7 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // sessões de trabalho longas), mas ainda capaz de pegar desatualização de
 // verdade, que nos casos reais já vistos sempre foi de dias, nunca só
 // poucas horas.
-const APP_BUILD_VERSION = '2026-08-11T21:00:00Z';
+const APP_BUILD_VERSION = '2026-08-12T13:00:00Z';
 
 // Compara esta build com o commit mais recente publicado no GitHub. Só
 // acende o aviso se o remoto for pelo menos 3 horas mais novo. Falha
@@ -19150,7 +19156,7 @@ function _moverModaisParaBody() {
 
 function bootApp() {
   _moverModaisParaBody();
-  var _numProvisorioBoot = genOrcNum();
+  var _numProvisorioBoot = genOrcNum(true);
   g('o-num').value = _numProvisorioBoot;
   genOrcNumSeguro().then(function(numConfirmado) {
     if (g('o-num') && g('o-num').value === _numProvisorioBoot) {
@@ -21722,22 +21728,12 @@ function renderOrcamentosTab() {
     + '</div>';
 }
 
-// ---- OVERRIDE newOrc to offer saving first ----
-async function newOrc() {
-  if (hasUnsavedOrc()) {
-    confirmarDescarte('novo orçamento em branco', function() { newOrc(); });
-    return;
-  }
-  // Mostra indicador enquanto busca o estado da nuvem para garantir número único
-  const numEl = g('o-num');
-  if (numEl) { numEl.value = '⏳ aguardando...'; numEl.disabled = true; }
-  showToast('🔄 Verificando numeração com a nuvem...', 'info');
-
-  const novoNum = await genOrcNumSeguro();
-
-  clearOrc(true);
-  if (numEl) { numEl.value = novoNum; numEl.disabled = false; }
-  showToast('✅ Orçamento ' + novoNum + ' criado.');
+// newOrc() é só um alias — clearOrc() já faz tudo que precisa (checagem de
+// trabalho não salvo, número provisório + confirmado com a nuvem, limpar o
+// formulário). Antes essa função duplicava essa lógica por conta própria,
+// causando uma segunda geração de número redundante a cada clique.
+function newOrc() {
+  clearOrc();
 }
 
 

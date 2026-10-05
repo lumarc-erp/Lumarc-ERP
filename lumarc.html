@@ -1417,6 +1417,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
           <input type="text" id="mos-nfr-item" placeholder="Ex: 1">
         </div>
       </div>
+      <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="abrirPendTarde('os', (DB.editOSIdx>=0 && DB.ordens[DB.editOSIdx]) ? DB.ordens[DB.editOSIdx].id : '')">⚠️ Registrar pendência descoberta tarde <span id="mos-pt-count" style="color:var(--muted)"></span></button></div>
 
       <hr class="div">
       <!-- FOTOS DA OS -->
@@ -4463,6 +4464,14 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     </div>
   </div>
 
+  <div id="mod-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;display:none">
+    <div style="font-size:12px;font-weight:800;margin-bottom:4px">🧩 MÓDULOS USADOS</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Desligar esconde as telas e para de gerar registros automáticos (contas, movimentos de estoque). Nenhum dado é apagado e dá para religar quando quiser. Só o administrador altera.</div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-alm"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
+    <button class="btn btn-ghost btn-sm" onclick="salvarModulos()">Aplicar módulos</button>
+  </div>
+
   <div style="display:flex;justify-content:flex-end;gap:8px">
     <button class="btn btn-primary" onclick="salvarEmpresa()">💾 Salvar dados da empresa</button>
   </div>
@@ -4783,6 +4792,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
             <option value="operacional">Operacional — OS e Almoxarifado</option>
             <option value="financeiro">Financeiro — módulo financeiro</option>
             <option value="comprador">Comprador — RC e almoxarifado</option>
+            <option value="assistente">Assistente Técnico — SOL e preparação de orçamentos (sem preço)</option>
             <option value="custom">Personalizado — definir abaixo</option>
           </select>
         </div>
@@ -5024,15 +5034,16 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
       <h2 style="font-size:16px;font-weight:800">🗒️ Solicitações de Orçamento</h2>
       <p style="font-size:12px;color:var(--muted)">Quadro de lembretes — nada se perde aqui. Registre a solicitação assim que chegar (WhatsApp, e-mail, visita) e construa o orçamento com calma depois.</p>
     </div>
-    <button class="btn btn-primary" onclick="abrirModalSolicitacao()">+ Nova Solicitação</button>
+    <div style="display:flex;gap:8px"><button class="btn btn-ghost" id="sol-btn-modelos" onclick="abrirSolModelos()" style="display:none" title="Famílias, perguntas e níveis de autonomia">⚙️ Modelos</button>
+    <button class="btn btn-primary" onclick="abrirModalSolicitacao()">+ Nova Solicitação</button></div>
   </div>
 
-  <div id="sol-kpis" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;max-width:480px"></div>
+  <div id="sol-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;max-width:820px"></div>
 
   <div id="sol-board" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:18px"></div>
 
   <div style="margin-top:32px">
-    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">✅ Convertidas recentemente</div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">📈 Em andamento / orçamento iniciado (recentes)</div>
     <div id="sol-board-convertidas" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
   </div>
 </div>
@@ -5055,6 +5066,11 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         <div class="form-group full">
           <label>Cliente</label>
           <input type="text" id="sol-cliente" placeholder="Nome do cliente">
+        </div>
+        <div class="form-group full">
+          <label>Família de serviço <span style="color:#DC2626">*</span></label>
+          <select id="sol-familia"></select>
+          <small style="font-size:10px;color:var(--muted)">Define o questionário de triagem. Obrigatória para novas solicitações.</small>
         </div>
         <div class="form-group">
           <label>Contato</label>
@@ -5083,6 +5099,99 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-solicitacao')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarSolicitacao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== MODAL TRIAGEM DA SOL (questionário guiado) ===== -->
+<div class="modal-overlay" id="modal-sol-triagem">
+  <div class="modal" style="width:940px;max-width:96vw">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="sol-tri-title">📋 Triagem da SOL</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="sol-tri-sub"></div>
+      </div>
+      <button class="modal-close" onclick="fecharSolTriagem()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="sol-tri-ctrl"></div>
+      <div id="sol-tri-resumo" style="margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px">
+        <div style="font-size:12px;font-weight:800">❓ PERGUNTAS DA FAMÍLIA</div>
+        <div id="sol-tri-contadores" style="font-size:11px"></div>
+      </div>
+      <div id="sol-tri-perguntas"></div>
+      <div id="sol-tri-premissas"></div>
+      <div id="sol-tri-tarde"></div>
+      <details style="margin-top:12px">
+        <summary style="font-size:12px;font-weight:700;cursor:pointer">🕓 Histórico da SOL</summary>
+        <div id="sol-tri-hist" style="margin-top:6px;max-height:160px;overflow:auto"></div>
+      </details>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharSolTriagem()">Fechar</button>
+      <button class="btn btn-ghost" onclick="abrirPendTarde('sol', _solTri && _solTri.id)">⚠️ Pendência descoberta tarde</button>
+      <button class="btn btn-ghost" onclick="solGerarMensagem()">💬 Gerar mensagem ao cliente</button>
+      <button class="btn btn-primary" onclick="solTriSalvar(false)">💾 Salvar respostas</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL MENSAGEM AO CLIENTE ===== -->
+<div class="modal-overlay" id="modal-sol-msg">
+  <div class="modal" style="width:620px">
+    <div class="modal-hdr">
+      <div class="modal-title">💬 Mensagem ao cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-sol-msg')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sol-msg-id">
+      <input type="hidden" id="sol-msg-n">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Revise e ajuste o texto se quiser. Ao copiar, o envio é registrado e a SOL passa para "Aguardando cliente".</div>
+      <textarea id="sol-msg-texto" rows="16" style="width:100%;font-size:12px"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-sol-msg')">Cancelar</button>
+      <button class="btn btn-primary" onclick="solMsgCopiar()">📋 Copiar e registrar envio</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL PENDÊNCIA DESCOBERTA TARDE ===== -->
+<div class="modal-overlay" id="modal-pend-tarde">
+  <div class="modal" style="width:520px">
+    <div class="modal-hdr">
+      <div class="modal-title">⚠️ Pendência descoberta tarde</div>
+      <button class="modal-close" onclick="closeModal('modal-pend-tarde')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pt-tipo">
+      <input type="hidden" id="pt-ref">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Registre uma informação que deveria ter sido perguntada/verificada antes. Isso alimenta as sugestões de novas perguntas críticas.</div>
+      <div class="form-group"><label>Família de serviço</label><select id="pt-familia"></select></div>
+      <div class="form-group" style="margin-top:10px"><label>O que faltou / por que apareceu tarde</label><textarea id="pt-motivo" rows="4" placeholder="Ex.: não perguntamos a dureza; o cliente exigia 58 HRC e só avisou na entrega."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-pend-tarde')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPendTarde()">💾 Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL MODELOS (famílias, perguntas, autonomia) ===== -->
+<div class="modal-overlay" id="modal-sol-modelos">
+  <div class="modal" style="width:900px;max-width:96vw">
+    <div class="modal-hdr">
+      <div class="modal-title">⚙️ Modelos da SOL — famílias, perguntas e autonomia</div>
+      <button class="modal-close" onclick="closeModal('modal-sol-modelos')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="sm-tabs" style="display:flex;gap:6px;margin-bottom:12px"></div>
+      <div id="sm-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-sol-modelos')">Fechar</button>
     </div>
   </div>
 </div>
@@ -6715,6 +6824,9 @@ let DB = {
   contratos:        [], // contratos recorrentes / manutenção
   boletins:         [], // boletins de medição vinculados a contratos
   solicitacoesOrc:  [], // quadro de solicitações de orçamento pendentes (post-its)
+  solFamilias:      [], // famílias de serviço do questionário guiado da SOL
+  solPerguntas:     [], // perguntas do questionário (modelos por família)
+  autonomias:       [], // nível de autonomia (1/2/3) por usuário e família de serviço
   saldoRealConfig:  { valor: 0, data: '', origem: '' }, // saldo bancário real
   notasFiscais:     [], // notas fiscais vinculadas a OS
   onboardingDone:   false, // first-run onboarding flag
@@ -7060,7 +7172,7 @@ function buildItemCardHTML(item, cfg, open) {
         </select>
       </div>
       <div class="form-group"><label>Complexidade</label>
-        <select id="item-${item.id}-compl" onchange="updateItemField(${item.id},'compl',this.value); updateItemPricing(${item.id});">
+        <select id="item-${item.id}-compl" ${temPerm('preco')?'':'disabled title="Somente quem tem permissão de preço"'} onchange="updateItemField(${item.id},'compl',this.value); updateItemPricing(${item.id});">
           <option value="baixa"${item.compl==='baixa'?' selected':''}>Baixa</option>
           <option value="media"${item.compl==='media'?' selected':''}>Média</option>
           <option value="alta"${item.compl==='alta'?' selected':''}>Alta</option>
@@ -7136,7 +7248,7 @@ function buildItemCardHTML(item, cfg, open) {
         </div>
         <div class="form-group">
           <label>Margem desejada (%)</label>
-          <div class="ip-group"><span class="ip-pre">%</span><input type="number" id="item-${item.id}-marg" value="${item.margPct||30}" min="0" max="99" step="0.1" oninput="updateItemPricing(${item.id})"></div>
+          <div class="ip-group"><span class="ip-pre">%</span><input type="number" id="item-${item.id}-marg" value="${item.margPct||30}" min="0" max="99" step="0.1" ${temPerm('preco')?'':'readonly'} oninput="updateItemPricing(${item.id})"></div>
         </div>
         <div class="form-group">
           <label>Preço sugerido</label>
@@ -7144,7 +7256,7 @@ function buildItemCardHTML(item, cfg, open) {
         </div>
         <div class="form-group">
           <label>Preço final (R$)</label>
-          <div class="ip-group"><span class="ip-pre">R$</span><input type="number" id="item-${item.id}-pfinal" value="${item.precoFinal||0}" min="0" step="0.01" oninput="updateItemFinalPrice(${item.id})" style="font-family:var(--mono);font-weight:700;border:2px solid var(--accent);border-radius:0 5px 5px 0"></div>
+          <div class="ip-group"><span class="ip-pre">R$</span><input type="number" id="item-${item.id}-pfinal" value="${item.precoFinal||0}" min="0" step="0.01" ${temPerm('preco')?'':'readonly'} oninput="updateItemFinalPrice(${item.id})" style="font-family:var(--mono);font-weight:700;border:2px solid var(--accent);border-radius:0 5px 5px 0"></div>
         </div>
         <div class="form-group">
           <label>Margem real</label>
@@ -8985,6 +9097,7 @@ function clearOrc(force) {
     return;
   }
   clearOrcDirty();
+  _orcSolRef = null;
   ['o-num','o-data','o-resp','o-prazo','o-pgto','o-obs',
    'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade'].forEach(id=>{ if(g(id)) g(id).value=''; });
   orcItems = [];
@@ -9279,7 +9392,7 @@ function saveAll(silent) {
     config:        DB.config,
     tributario:    DB.tributario,
     folhaMensal:   DB.folhaMensal,
-    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
+    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
     transferenciasCaixa: DB.transferenciasCaixa || [],
     regrasClassificacaoCaixa: DB.regrasClassificacaoCaixa || null,
     nfAliases: DB.nfAliases || {},
@@ -9545,6 +9658,9 @@ function applyLoadedData(save, skipOrcData) {
   DB.orcamentos     = mergeArrayByKey(DB.orcamentos, save.orcamentos, 'id');
   DB.requisicoes    = mergeArrayByKey(DB.requisicoes, save.requisicoes, 'id');
   DB.solicitacoesOrc = mergeArrayByKey(DB.solicitacoesOrc, save.solicitacoesOrc, 'id');
+  DB.solFamilias     = mergeArrayByKey(DB.solFamilias, save.solFamilias, 'id');
+  DB.solPerguntas    = mergeArrayByKey(DB.solPerguntas, save.solPerguntas, 'id');
+  DB.autonomias      = mergeArrayByKey(DB.autonomias, save.autonomias, 'id');
   DB.caixasConfig  = save.caixasConfig  || null;
   // Merge por código em vez de sobrescrever — preserva contas criadas localmente
   var _remotePlano = (save.planoContas || []).map(function(p) {
@@ -11575,6 +11691,7 @@ function openOSModal(idx) {
     if (g('mos-doc-tipo')) g('mos-doc-tipo').value = (null)?.value === 'venda' ? 'pv' : 'os';
     if (g('mos-nfr-num'))  g('mos-nfr-num').value  = '';
     if (g('mos-nfr-item')) g('mos-nfr-item').value = '';
+    solAtualizarContadorPTOS();
     removeOSPCFile();
   }
   // Common: load fotos and PC if editing
@@ -11589,6 +11706,7 @@ function openOSModal(idx) {
       if (g('mos-doc-tipo')) g('mos-doc-tipo').value = os.docTipo || 'os';
       if (g('mos-nfr-num'))  g('mos-nfr-num').value  = os.nfRemessaNum  || '';
       if (g('mos-nfr-item')) g('mos-nfr-item').value = os.nfRemessaItem || '';
+      solAtualizarContadorPTOS();
       const nameEl = g('mos-pc-file-name');
       const removeBtn = g('mos-pc-remove-btn');
       if (nameEl) nameEl.textContent = _osPC.fileName || 'Clique para anexar PDF ou imagem';
@@ -11745,6 +11863,7 @@ function saveOS() {
     tipoOrc:    (orcItems[0]?.tipo || 'servico')  || 'servico',
     pcRecebidoConfirmadoEm:  DB.editOSIdx >= 0 ? DB.ordens[DB.editOSIdx].pcRecebidoConfirmadoEm  : undefined,
     pcRecebidoConfirmadoPor: DB.editOSIdx >= 0 ? DB.ordens[DB.editOSIdx].pcRecebidoConfirmadoPor : undefined,
+    pendenciasTarde:         DB.editOSIdx >= 0 ? DB.ordens[DB.editOSIdx].pendenciasTarde : undefined,
     criadoEm: DB.editOSIdx >= 0 ? DB.ordens[DB.editOSIdx].criadoEm : now,
     _updatedAt: new Date().toISOString(),
   };
@@ -12820,11 +12939,11 @@ function renderDashKPIs(filtered, all, now) {
     { icon:'✅', val: fmt(valorRecebido), label:'Recebido', sub:`no período`, cls:'green' },
     { icon:'📈', val: fmtP(margemMedia), label:'Margem Média', sub:'das OS no período', cls: margemMedia > 20 ? 'green' : margemMedia > 10 ? 'orange' : 'red' },
     { icon:'🏢', val: totalClientes, label:'Clientes Cad.', sub:`${DB.clientes?.filter(c=>c.status==='ativo').length||0} ativos`, cls:'blue' },
-    { icon:'🔩', val: totalMat, label:'Mat. Cadastrados', sub: matCriticos > 0 ? `⚠ ${matCriticos} críticos` : 'Estoque OK', cls: matCriticos > 0 ? 'orange' : 'green' },
+    moduloAtivo('alm') ? { icon:'🔩', val: totalMat, label:'Mat. Cadastrados', sub: matCriticos > 0 ? `⚠ ${matCriticos} críticos` : 'Estoque OK', cls: matCriticos > 0 ? 'orange' : 'green' } : null,
     { icon:'👷', val: DB.funcionarios?.length || 0, label:'Funcionários', sub:`custo/h médio ${fmt((DB.funcionarios||[]).reduce((s,f)=>s+(f.custoHora||0),0)/Math.max(DB.funcionarios?.length||1,1))}`, cls:'purple' },
   ];
 
-  g('dash-kpis').innerHTML = kpis.map(k => `
+  g('dash-kpis').innerHTML = kpis.filter(Boolean).map(k => `
     <div class="d-kpi ${k.cls}">
       <div class="d-kpi-icon">${k.icon}</div>
       <div class="d-kpi-val">${k.val}</div>
@@ -12869,7 +12988,7 @@ function renderDashAlertas(ordens, now) {
   });
 
   // Estoque crítico
-  (DB.materiais||[]).filter(m => m.estoque <= m.estoqueMin && m.estoqueMin > 0).slice(0,3).forEach(m => {
+  (moduloAtivo('alm') ? (DB.materiais||[]) : []).filter(m => m.estoque <= m.estoqueMin && m.estoqueMin > 0).slice(0,3).forEach(m => {
     alerts.push({ type:'orange', icon:'📦', title:`${m.desc}`, sub:`Estoque: ${m.estoque} ${m.unUso||m.un} (mín: ${m.estoqueMin})`, action:`goToTab('tab-mat')` });
   });
 
@@ -13034,6 +13153,8 @@ function renderDashOSRecentes(ordens, now) {
 // ---- ESTOQUE CRÍTICO ----
 function renderDashEstoque() {
   const el = g('dash-estoque');
+  if (el && el.parentElement) el.parentElement.style.display = moduloAtivo('alm') ? '' : 'none';
+  if (!moduloAtivo('alm')) return;
   const criticos = (DB.materiais||[]).filter(m => m.estoque <= m.estoqueMin && m.estoqueMin > 0);
   if (!criticos.length) {
     el.innerHTML = '<div class="d-empty" style="color:var(--green)">✅ Estoque OK</div>';
@@ -14299,6 +14420,8 @@ function gerarReceberDaOS(osIdx) {
 
 // ---- FINANCEIRO NO DASHBOARD ----
 function renderDashFinKPIs() {
+  const _row = g('dash-fin-row'); if (_row) _row.style.display = moduloAtivo('fin') ? '' : 'none';
+  if (!moduloAtivo('fin')) return;
   const now = new Date();
   const pagar = DB.contasPagar||[];
   const receber = DB.contasReceber||[];
@@ -14817,7 +14940,7 @@ function saveCompra() {
   // array, sem considerar exclusões — por isso a conta "ressuscitava").
   const tombstoneKeyPC = 'autocp-pc-' + obj.num;
   const existing = (DB.contasPagar||[]).find(p=>p.nf===obj.num);
-  if (!existing && obj.total > 0 && !(DB._tombstones && DB._tombstones[tombstoneKeyPC])) {
+  if (moduloAtivo('fin') && !existing && obj.total > 0 && !(DB._tombstones && DB._tombstones[tombstoneKeyPC])) {
     DB.contasPagar.push({
       id: tombstoneKeyPC,
       desc: `Pedido de Compra ${obj.num} — ${obj.forn}`, forn: obj.forn,
@@ -14831,6 +14954,20 @@ function saveCompra() {
   saveAll(true);
   renderComprasTable();
   showToast(`✅ Pedido ${obj.num} salvo!`);
+}
+
+function marcarPCRecebido(idx) {
+  var pc = (DB.pedidosCompra||[])[idx];
+  if (!pc) return;
+  if (!confirm('Marcar o pedido ' + pc.num + ' como RECEBIDO?')) return;
+  var agora = new Date();
+  pc.status = 'Recebido';
+  pc.dataRecebimento = agora.toISOString().split('T')[0];
+  pc._updatedAt = agora.toISOString();
+  saveAll(true);
+  renderComprasTable();
+  if (typeof updateTopbarCadeiaBadges === 'function') updateTopbarCadeiaBadges();
+  showToast('✅ Pedido ' + pc.num + ' marcado como recebido.');
 }
 
 function deleteCompra(i) {
@@ -14884,7 +15021,7 @@ function renderComprasTable() {
       <td class="mono">${fmt(pc.total)}</td>
       <td><span class="pill ${stCls[pc.status]||''}">${pc.status}</span></td>
       <td style="white-space:nowrap">
-        ${pc.status!=='Recebido'&&pc.status!=='Cancelado' ? `<button class="btn btn-primary btn-xs" onclick="abrirRecebimentoPC(${realIdx})" title="Receber este pedido">📦 Receber</button>` : ''}
+        ${pc.status!=='Recebido'&&pc.status!=='Cancelado' ? (moduloAtivo('alm') ? `<button class="btn btn-primary btn-xs" onclick="abrirRecebimentoPC(${realIdx})" title="Receber este pedido">📦 Receber</button>` : `<button class="btn btn-primary btn-xs" onclick="marcarPCRecebido(${realIdx})" title="Marcar como recebido (sem estoque/financeiro)">✅ Marcar recebido</button>`) : ''}
         <button class="btn btn-ghost btn-xs" onclick="openComprasModal(${realIdx})">✏️</button>
         <button class="btn btn-green btn-xs" onclick="printPedidoCompra(${realIdx})">📄</button>
         <button class="btn btn-danger btn-xs" onclick="deleteCompra(${realIdx})">×</button>
@@ -15350,7 +15487,7 @@ function confirmarXML() {
           qtd: it.qCom, origem: 'xml',
         });
         // ── REGISTRAR ENTRADA NO ALMOXARIFADO ──────────────────────────────
-        DB.almMovimentos.push({
+        _almPush({
           id: 'mov-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'-1',
           tipo:         'entrada',
           matIdx:       matIdx,
@@ -15389,7 +15526,7 @@ function confirmarXML() {
         DB.materiais.push(novoMat);
         const newIdx = DB.materiais.length - 1;
         // ── REGISTRAR ENTRADA NO ALMOXARIFADO (item novo) ──────────────────
-        DB.almMovimentos.push({
+        _almPush({
           id: 'mov-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'-2',
           tipo:         'entrada',
           matIdx:       newIdx,
@@ -15447,7 +15584,7 @@ function confirmarXML() {
       const nfKey = `NF-e ${nf.serie}/${nf.num}`;
       const tombstoneKeyNF = 'autocp-nf-' + nfKey;
       const existing = (DB.contasPagar||[]).find(p => p.nf === nfKey);
-      if (!existing && !(DB._tombstones && DB._tombstones[tombstoneKeyNF])) {
+      if (moduloAtivo('fin') && !existing && !(DB._tombstones && DB._tombstones[tombstoneKeyNF])) {
         DB.contasPagar.push({
           id: tombstoneKeyNF,
           desc: `NF-e ${nf.serie}/${nf.num} — ${nf.emitNome}`,
@@ -17113,7 +17250,7 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // sessões de trabalho longas), mas ainda capaz de pegar desatualização de
 // verdade, que nos casos reais já vistos sempre foi de dias, nunca só
 // poucas horas.
-const APP_BUILD_VERSION = '2026-08-12T13:00:00Z';
+const APP_BUILD_VERSION = '2026-10-06T00:30:00Z';
 
 // Compara esta build com o commit mais recente publicado no GitHub. Só
 // acende o aviso se o remoto for pelo menos 3 horas mais novo. Falha
@@ -17891,6 +18028,9 @@ function buildSavePayload() {
     orcamentos:          DB.orcamentos           || [],
     requisicoes:         DB.requisicoes          || [],
     solicitacoesOrc:     DB.solicitacoesOrc      || [],
+    solFamilias:         DB.solFamilias          || [],
+    solPerguntas:        DB.solPerguntas         || [],
+    autonomias:          DB.autonomias           || [],
     config:              DB.config               || {},
     tributario:          DB.tributario           || {},
     folhaMensal:         DB.folhaMensal          || {},
@@ -18873,6 +19013,9 @@ const PERM_MODULES = [
   { key:'compras',   label:'🛒 Compras/RC',       desc:'Requisições de compra e aprovação' },
   { key:'config',    label:'⚙️ Configurações',   desc:'Personalização, Sync/Backup' },
   { key:'alm',       label:'🏪 Almoxarifado',    desc:'Estoque, retiradas, devoluções' },
+  { key:'preco',     label:'💲 Preço e complexidade', desc:'Editar complexidade, margem e preço final do orçamento' },
+  { key:'revisar',   label:'✅ Revisar e decidir SOL', desc:'Marcar Revisada, Proposta enviada, Ganha/Perdida e liberar orçamento' },
+  { key:'solcfg',    label:'📝 Modelos de perguntas',  desc:'Editar famílias/perguntas da SOL e níveis de autonomia' },
 ];
 
 const PERFIL_PERMS = {
@@ -18884,8 +19027,46 @@ const PERFIL_PERMS = {
   comprador:   { orc:true,  cad:false, fin:false, dash:true,  usuarios:false, config:false, alm:true,  compras:true, qual:true },
   custom:      { orc:true,  cad:true,  fin:true,  dash:true,  usuarios:false, config:false, alm:true, compras:true, qual:true },
 };
+// Permissões novas (preço / revisão da SOL / modelos de perguntas). Perfis já
+// existentes mantêm o comportamento de hoje (preço e revisão liberados);
+// só o Assistente Técnico nasce sem poder de preço nem de decisão.
+Object.keys(PERFIL_PERMS).forEach(function(k) {
+  var p = PERFIL_PERMS[k];
+  p.preco   = (k !== 'financeiro');
+  p.revisar = (k !== 'financeiro');
+  p.solcfg  = (k === 'admin' || k === 'gerente' || k === 'operacional');
+});
+PERFIL_PERMS.assistente = { orc:true, cad:false, fin:false, dash:false, usuarios:false, config:false, alm:false, compras:false, qual:false, preco:false, revisar:false, solcfg:false };
 
 var currentUser = null;  // var avoids TDZ in async context
+
+// Checa uma permissão do usuário logado. Usuários antigos (salvos antes de
+// uma permissão existir) herdam o padrão do perfil em vez de ficarem sem acesso.
+function temPerm(key) {
+  var u = currentUser;
+  if (!u) return false;
+  if (u.perfil === 'admin') return true;
+  var p = u.perms;
+  if (p && p[key] !== undefined) return !!p[key];
+  var d = PERFIL_PERMS[u.perfil];
+  return d ? !!d[key] : false;
+}
+
+// Módulos que a empresa decidiu não usar (financeiro / almoxarifado).
+// Desligar só esconde telas e para de gerar registros novos — nenhum dado é apagado.
+function moduloAtivo(key) {
+  return !!(DB.config && DB.config.modulos && DB.config.modulos[key] === true);
+}
+function _almPush(obj) { if (moduloAtivo('alm')) DB.almMovimentos.push(obj); }
+function aplicarModulosNaNav() {
+  if (!currentUser) return;
+  var perms = currentUser.perms || PERFIL_PERMS[currentUser.perfil] || PERFIL_PERMS.gerente;
+  document.querySelectorAll('#main-tabs-bar .tab[data-group]').forEach(function(tab) {
+    var grp = tab.dataset.group;
+    if (grp === 'fin') tab.style.display = (perms.fin && moduloAtivo('fin')) ? '' : 'none';
+    else if (grp === 'alm') tab.style.display = (perms.alm && moduloAtivo('alm')) ? '' : 'none';
+  });
+}
 
 function resetLoginEmergencia() {
   if (!confirm('Isso vai redefinir APENAS o cadastro de usuários (dados do sistema são mantidos).\n\nO login voltará a ser: admin / admin123\n\nConfirmar?')) return;
@@ -19125,11 +19306,11 @@ function applyPermissions(user) {
   document.querySelectorAll('#main-tabs-bar .tab[data-group]').forEach(tab => {
     const grp = tab.dataset.group;
     if (grp==='conf')    tab.style.display = showConf     ? '' : 'none';
-    else if (grp==='fin') tab.style.display = perms.fin   ? '' : 'none';
+    else if (grp==='fin') tab.style.display = (perms.fin && moduloAtivo('fin'))   ? '' : 'none';
     else if (grp==='cad') tab.style.display = perms.cad   ? '' : 'none';
     else if (grp==='orc') tab.style.display = perms.orc   ? '' : 'none';
     else if (grp==='dash') tab.style.display = perms.dash!==false ? '' : 'none';
-    else if (grp==='alm')  tab.style.display = perms.alm   ? '' : 'none';
+    else if (grp==='alm')  tab.style.display = (perms.alm && moduloAtivo('alm'))   ? '' : 'none';
     else if (grp==='apo')  tab.style.display = perms.orc   ? '' : 'none';
     else if (grp==='qual') tab.style.display = perms.qual!==false ? '' : 'none';
   });
@@ -19137,7 +19318,7 @@ function applyPermissions(user) {
 }
 
 function updateTopbarUser(user) {
-  const labels = { admin:'Admin', gerente:'Gerente', comercial:'Comercial', operacional:'Operacional', financeiro:'Financeiro', custom:'Custom' };
+  const labels = { admin:'Admin', gerente:'Gerente', comercial:'Comercial', operacional:'Operacional', financeiro:'Financeiro', assistente:'Assistente', custom:'Custom' };
   const el = g('topbar-user-info');
   if (el) el.innerHTML = '<span style="font-size:11px;color:#94A3B8">' + user.nome + '</span> <span class="role-badge role-' + user.perfil + '" style="font-size:9px">' + (labels[user.perfil]||user.perfil) + '</span>';
 }
@@ -19456,6 +19637,7 @@ function limparDuplicatasFolha() {
   _bootSeguroAposCloud(backfillUpdatedAtOrcamentos, 'backfillUpdatedAtOrcamentos');
   _bootSeguroAposCloud(backfillUpdatedAtPCeOS, 'backfillUpdatedAtPCeOS');
   _bootSeguroAposCloud(backfillTipoUsoMaquinas, 'backfillTipoUsoMaquinas');
+  _bootSeguroAposCloud(solSeedModelos, 'solSeedModelos');
   _bootSeguroAposCloud(migrarFotosParaBinSeparado, 'migrarFotosParaBinSeparado');
   _bootSeguroAposCloud(migrarStatusOrcLegado, 'migrarStatusOrcLegado');
   _bootSeguro(_iniciarRascunhoAutoSave, '_iniciarRascunhoAutoSave');
@@ -19914,7 +20096,8 @@ function openUserModal(idx) {
     if(g('mu-perfil')) g('mu-perfil').value = u.perfil;
     if(g('mu-status')) g('mu-status').value = u.status||'ativo';
     var perms = u.perms || PERFIL_PERMS[u.perfil] || {};
-    PERM_MODULES.forEach(function(m){ var cb=g('perm-'+m.key); if(cb){cb.checked=!!perms[m.key]; updatePermWrap(m.key,!!perms[m.key]);} });
+    var _defPerf = PERFIL_PERMS[u.perfil] || {};
+    PERM_MODULES.forEach(function(m){ var cb=g('perm-'+m.key); if(cb){ var _v = (perms[m.key] !== undefined) ? perms[m.key] : _defPerf[m.key]; cb.checked=!!_v; updatePermWrap(m.key,!!_v);} });
   } else {
     ['mu-nome','mu-login','mu-senha','mu-senha2'].forEach(function(id){if(g(id))g(id).value='';});
     if(g('mu-perfil')) g('mu-perfil').value = 'operacional';
@@ -20795,6 +20978,8 @@ function salvarOrcamento() {
     _updatedAt: agora.toISOString(),
     historico: [],
     estado:     capturarEstadoOrc(),
+    solId:      _orcSolRef ? _orcSolRef.id  : (existing >= 0 ? DB.orcamentos[existing].solId  : undefined),
+    solNum:     _orcSolRef ? _orcSolRef.num : (existing >= 0 ? DB.orcamentos[existing].solNum : undefined),
   };
 
   if (existing >= 0) {
@@ -21037,6 +21222,7 @@ function abrirOrcamento(id) {
     goToTab('tab-orc');
     setTimeout(function() {
       restaurarEstadoOrc(orc.estado);
+      _orcSolRef = orc.solId ? { id: orc.solId, num: orc.solNum || '' } : null;
       showToast('📂 Orçamento ' + orc.num + ' carregado!');
     }, 120);
   };
@@ -21113,6 +21299,750 @@ function mudarStatusOrc(id, novoStatus) {
 var _solAnexosTemp = [];
 var _solEditId = null;
 
+// ============================================================
+// SOL GUIADA — Fase 1: questionário por família, etapas e triagem
+// ============================================================
+var _orcSolRef = null;           // SOL que originou o orçamento aberto na tela
+var _solTri = null;              // estado de trabalho da tela de triagem
+var _solTriTimer = null;
+var _smTab = 'fam', _smFiltro = '', _smEdit = null;
+
+var SOL_ETAPAS = [
+  { k:'nova',               l:'Nova',               c:'#64748B' },
+  { k:'triagem',            l:'Em triagem',         c:'#2563EB' },
+  { k:'aguardando_cliente', l:'Aguardando cliente', c:'#D97706' },
+  { k:'pronta',             l:'Pronta para orçar',  c:'#059669' },
+  { k:'preparacao',         l:'Em preparação',      c:'#7C3AED' },
+  { k:'revisao',            l:'Aguardando revisão', c:'#DB2777' },
+  { k:'revisada',           l:'Revisada',           c:'#0891B2' },
+  { k:'proposta',           l:'Proposta enviada',   c:'#1D4ED8' },
+  { k:'ganha',              l:'Ganha',              c:'#15803D' },
+  { k:'perdida',            l:'Perdida',            c:'#B91C1C' },
+];
+// Etapas de decisão: só quem tem a permissão "revisar" (Fabian/Marcos/admin) marca ou desfaz.
+var SOL_ETAPAS_DECISAO = ['revisada','proposta','ganha','perdida'];
+var SOL_STATUS_RESP = {
+  C: { l:'Confirmado', c:'#059669' },
+  H: { l:'Hipótese',   c:'#D97706' },
+  P: { l:'Pendente',   c:'#DC2626' },
+  N: { l:'N.A.',       c:'#64748B' },
+};
+
+function _solEsc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _solAgora() { return new Date().toISOString(); }
+function _solUser() { return currentUser ? currentUser.nome : 'Sistema'; }
+function _solOrd(a, b) { return (a.ordem || 0) - (b.ordem || 0) || String(a.nome || a.texto || '').localeCompare(String(b.nome || b.texto || '')); }
+
+function solEtapaInfo(k) { return SOL_ETAPAS.find(function(e) { return e.k === k; }) || SOL_ETAPAS[0]; }
+// SOL antiga (sem etapa): pendente = Nova; já virou orçamento = Em preparação.
+function solEtapa(s) { return s.etapa || (s.status === 'convertido' ? 'preparacao' : 'nova'); }
+
+function solFamiliasAtivas() { return (DB.solFamilias || []).filter(function(f) { return f.ativa !== false; }).sort(_solOrd); }
+function solFamiliaNome(id) {
+  var f = (DB.solFamilias || []).find(function(x) { return x.id === id; });
+  return f ? f.nome : 'Não classificada';
+}
+function solPerguntasDaFamilia(famId) {
+  return (DB.solPerguntas || []).filter(function(p) { return p.ativa !== false && (p.familias || []).indexOf(famId) >= 0; }).sort(_solOrd);
+}
+function solRespOf(resp, pid) { return (resp && resp[pid]) || null; }
+function solPerguntaVisivel(p, resp) {
+  if (!p.cond || !p.cond.perguntaId) return true;
+  var r = solRespOf(resp, p.cond.perguntaId);
+  if (!r || r.s === 'N' || !String(r.v || '').trim()) return false;
+  var vals = (p.cond.valores || []).map(function(x) { return String(x).trim().toLowerCase(); });
+  return vals.indexOf(String(r.v).trim().toLowerCase()) >= 0;
+}
+// Pendente = sem resposta, marcada Pendente, ou Confirmado/Hipótese sem valor. N.A. conta como resolvida.
+function solPerguntaPendente(p, resp) {
+  var r = solRespOf(resp, p.id);
+  if (!r) return true;
+  if (r.s === 'N') return false;
+  if (!r.s || r.s === 'P') return true;
+  return !String(r.v || '').trim();
+}
+function solPerguntasVisiveis(s, famId) {
+  famId = famId || s.familiaId;
+  if (!famId) return [];
+  return solPerguntasDaFamilia(famId).filter(function(p) { return solPerguntaVisivel(p, s.respostas); });
+}
+function solCriticasPendentes(s) { return solPerguntasVisiveis(s).filter(function(p) { return p.critica && solPerguntaPendente(p, s.respostas); }); }
+function solPendentes(s) { return solPerguntasVisiveis(s).filter(function(p) { return solPerguntaPendente(p, s.respostas); }); }
+function solHipoteses(s) {
+  return solPerguntasVisiveis(s).filter(function(p) {
+    var r = solRespOf(s.respostas, p.id);
+    return r && r.s === 'H' && String(r.v || '').trim();
+  });
+}
+
+function solLog(s, texto, etapa) {
+  if (!s.historico) s.historico = [];
+  var e = { em: _solAgora(), por: _solUser(), t: texto };
+  if (etapa) e.e = etapa;
+  s.historico.push(e);
+  // Limita o tamanho: descarta primeiro o que não é mudança de etapa (as métricas dependem delas).
+  while (s.historico.length > 80) {
+    var i = s.historico.findIndex(function(x) { return !x.e; });
+    s.historico.splice(i >= 0 ? i : 0, 1);
+  }
+}
+
+function solPodeMudarEtapa(s, destino) {
+  var atual = solEtapa(s);
+  if (SOL_ETAPAS_DECISAO.indexOf(destino) >= 0 && !temPerm('revisar'))
+    return 'Só quem tem permissão de revisão (Fabian/Marcos) pode marcar "' + solEtapaInfo(destino).l + '".';
+  if (SOL_ETAPAS_DECISAO.indexOf(atual) >= 0 && !temPerm('revisar'))
+    return 'Esta SOL está em "' + solEtapaInfo(atual).l + '" — só quem tem permissão de revisão pode alterar.';
+  if (destino === 'pronta' && s.familiaId) {
+    var cp = solCriticasPendentes(s);
+    if (cp.length) return 'Há ' + cp.length + ' pergunta(s) crítica(s) pendente(s). Resolva (Confirmado, Hipótese ou N.A.) antes de marcar "Pronta para orçar".';
+  }
+  return '';
+}
+function solAplicarEtapa(s, destino, motivo) {
+  var atual = solEtapa(s);
+  if (atual === destino) return;
+  s.etapa = destino;
+  s._updatedAt = _solAgora();
+  solLog(s, 'Etapa: ' + solEtapaInfo(atual).l + ' → ' + solEtapaInfo(destino).l + (motivo ? ' (' + motivo + ')' : ''), destino);
+  if (destino === 'ganha' || destino === 'perdida') {
+    if (s.status === 'pendente') s.status = 'encerrada';
+  } else if (s.status === 'encerrada') {
+    s.status = s.convertidoEm ? 'convertido' : 'pendente';
+  }
+}
+
+// ---------- seed dos modelos iniciais (revisados depois pelo Fabian) ----------
+function solSeedModelos() {
+  if ((DB.solFamilias || []).length) return;
+  if (!DB.solFamilias) DB.solFamilias = [];
+  if (!DB.solPerguntas) DB.solPerguntas = [];
+  var TS = '2026-10-05T00:00:00.000Z';
+  var SN = 'simnao', TX = 'texto', NU = 'numero', LI = 'lista';
+  var FAM = [
+    ['eixo', 'Eixo', [
+      ['Há desenho, amostra ou foto?', LI, 1, ['Desenho com tolerâncias','Desenho sem tolerâncias','Amostra','Desenho + amostra','Só foto','Nenhum']],
+      ['Material especificado?', TX, 1],
+      ['Quantidade', NU, 1],
+      ['Tolerância das sedes de rolamento/retentor', TX, 1, null, ['01', ['Desenho sem tolerâncias','Amostra']]],
+      ['Tratamento térmico / dureza?', TX, 1],
+      ['Chaveta, rosca ou estriado?', TX, 0],
+      ['Fabricar novo ou recuperar?', LI, 1, ['Fabricar novo','Recuperar'], ['01', ['Amostra','Desenho + amostra']]],
+      ['Exige certificado de material / relatório dimensional?', SN, 1],
+      ['Prazo e se é parada de máquina', TX, 1],
+    ]],
+    ['bucha', 'Bucha / Mancal', [
+      ['Material (bronze, aço, nylon…)', TX, 1],
+      ['Quantidade', NU, 1],
+      ['Dimensões / ajuste com eixo e alojamento', TX, 1],
+      ['Canal de lubrificação?', SN, 0],
+      ['Acabamento interno / rugosidade', TX, 0],
+      ['Amostra disponível?', SN, 0],
+      ['Prazo', TX, 1],
+    ]],
+    ['flange', 'Flange / Disco', [
+      ['Norma ou desenho?', TX, 1],
+      ['Material', TX, 1],
+      ['Quantidade', NU, 1],
+      ['Furação (padrão / classe de pressão)', TX, 1],
+      ['Face (RF/FF) e acabamento', TX, 0],
+      ['Exige certificado?', SN, 1],
+      ['Prazo', TX, 1],
+    ]],
+    ['engrenagem', 'Engrenagem / Polia', [
+      ['Amostra ou desenho?', LI, 1, ['Amostra','Desenho','Ambos']],
+      ['Módulo / passo e número de dentes', TX, 1],
+      ['Material e tratamento', TX, 1],
+      ['Quantidade', NU, 1],
+      ['Furo / chaveta', TX, 0],
+      ['Prazo', TX, 1],
+    ]],
+    ['recuperacao', 'Recuperação de peça', [
+      ['Diagnóstico / condição atual (fotos anexadas?)', TX, 1],
+      ['O que deve ser recuperado', TX, 1],
+      ['Processo aceito (solda, metalização, embuchamento, cromo)', TX, 1],
+      ['Material base conhecido?', TX, 1],
+      ['Tolerância final', TX, 1],
+      ['A peça pode sair da planta?', SN, 0],
+      ['Prazo / parada de máquina', TX, 1],
+    ]],
+    ['soldada', 'Peça soldada / Caldeiraria', [
+      ['Há desenho?', SN, 1],
+      ['Material e espessuras', TX, 1],
+      ['Exige procedimento / qualificação de solda?', SN, 1],
+      ['Exige END / inspeção?', SN, 1],
+      ['Pintura / tratamento', TX, 0],
+      ['Quantidade', NU, 1],
+      ['Prazo', TX, 1],
+    ]],
+    ['estrutura', 'Estrutura metálica', [
+      ['Há projeto/desenho e memória de cálculo?', SN, 1],
+      ['Perfis / material', TX, 1],
+      ['Montagem em campo?', SN, 1],
+      ['Esquema de pintura', TX, 1],
+      ['Exige ART?', SN, 1],
+      ['Exige documentação de segurança / integração?', SN, 1],
+      ['Prazo', TX, 1],
+    ]],
+    ['pintura', 'Pintura industrial', [
+      ['Área / peças', TX, 1],
+      ['Esquema de pintura especificado?', TX, 1],
+      ['Preparação de superfície (jato, grau)', TX, 1],
+      ['Na oficina ou em campo?', LI, 1, ['Oficina','Campo']],
+      ['Prazo', TX, 1],
+    ]],
+    ['campo', 'Serviço em campo / Manutenção', [
+      ['Escopo', TX, 1],
+      ['Local e acesso', TX, 1],
+      ['Documentação de segurança / NRs / integração', TX, 1],
+      ['PT e horário de trabalho', TX, 1],
+      ['Ferramentas / equipamentos necessários', TX, 0],
+      ['Fornecimento de material', LI, 1, ['Cliente','LUMARC','Misto']],
+      ['Prazo / janela de parada', TX, 1],
+    ]],
+  ];
+  FAM.forEach(function(f, fi) {
+    DB.solFamilias.push({ id: 'fam-' + f[0], nome: f[1], ordem: fi + 1, ativa: true, _updatedAt: TS });
+    f[2].forEach(function(q, qi) {
+      DB.solPerguntas.push({
+        id: 'p-' + f[0] + '-' + (qi < 9 ? '0' : '') + (qi + 1),
+        texto: q[0], tipo: q[1], critica: !!q[2], opcoes: q[3] || [],
+        familias: ['fam-' + f[0]],
+        cond: q[4] ? { perguntaId: 'p-' + f[0] + '-' + q[4][0], valores: q[4][1] } : null,
+        ordem: qi + 1, ativa: true, _updatedAt: TS,
+      });
+    });
+  });
+  saveAll(true);
+  if (typeof updateTopbarSolBadge === 'function') updateTopbarSolBadge();
+  console.log('[SOL] Modelos iniciais criados: ' + FAM.length + ' famílias.');
+}
+
+// ---------- autonomia ----------
+function solNivelDe(login, famId) {
+  var rs = DB.autonomias || [];
+  var f = rs.find(function(a) { return a.login === login && a.familiaId === famId && a.nivel > 0; });
+  if (f) return f.nivel;
+  var g0 = rs.find(function(a) { return a.login === login && a.familiaId === '*' && a.nivel > 0; });
+  return g0 ? g0.nivel : 1;
+}
+
+// ---------- cartão do quadro ----------
+function solCardMeta(s) {
+  var et = solEtapaInfo(solEtapa(s));
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">';
+  h += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + et.c + '22;color:' + et.c + ';font-weight:700">' + et.l + '</span>';
+  if (s.familiaId) {
+    h += '<span style="font-size:10px;color:#92400E">🏷️ ' + _solEsc(solFamiliaNome(s.familiaId)) + '</span>';
+    var n = solCriticasPendentes(s).length;
+    if (n && solEtapa(s) !== 'aguardando_cliente') h += '<span style="font-size:10px;color:#B91C1C;font-weight:700">★ ' + n + ' crítica(s) pendente(s)</span>';
+  } else {
+    h += '<span style="font-size:10px;color:#92400E">🏷️ Não classificada</span>';
+  }
+  if (s.responsavel) h += '<span style="font-size:10px;color:#92400E">👤 ' + _solEsc(s.responsavel) + '</span>';
+  if (solEtapa(s) === 'aguardando_cliente' && s.msgClienteEm) {
+    var d = Math.floor((Date.now() - new Date(s.msgClienteEm)) / 86400000);
+    h += '<span style="font-size:10px;color:' + (d >= 2 ? '#B91C1C' : '#92400E') + ';font-weight:' + (d >= 2 ? '700' : '400') + '">aguardando há ' + d + ' dia(s)</span>';
+  }
+  return h + '</div>';
+}
+function solMiniEtapa(s) {
+  var et = solEtapaInfo(solEtapa(s));
+  return '<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + et.c + '22;color:' + et.c + ';font-weight:700">' + et.l + '</span>'
+    + '<button class="btn btn-ghost btn-xs" onclick="abrirSolTriagem(\'' + s.id + '\')">📋 Abrir</button></div>';
+}
+function solPreencherSelectFamilia(sol) {
+  var sel = g('sol-familia');
+  if (!sel) return;
+  var atual = sol ? (sol.familiaId || '') : '';
+  var opts = [];
+  opts.push(sol && !atual ? '<option value="">— Não classificada —</option>' : '<option value="">— Escolha a família —</option>');
+  var fams = solFamiliasAtivas();
+  if (atual && !fams.some(function(f) { return f.id === atual; })) {
+    var fx = (DB.solFamilias || []).find(function(f) { return f.id === atual; });
+    if (fx) fams.push(fx);
+  }
+  fams.forEach(function(f) { opts.push('<option value="' + _solEsc(f.id) + '"' + (f.id === atual ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'); });
+  sel.innerHTML = opts.join('');
+}
+
+// ============================================================
+// TELA DE TRIAGEM
+// ============================================================
+function solTriSol() { return _solTri ? (DB.solicitacoesOrc || []).find(function(x) { return x.id === _solTri.id; }) : null; }
+
+function abrirSolTriagem(id) {
+  if (_solTri && _solTri.dirty) solTriSalvar(true);
+  var s = (DB.solicitacoesOrc || []).find(function(x) { return x.id === id; });
+  if (!s) return;
+  _solTri = { id: id, resp: JSON.parse(JSON.stringify(s.respostas || {})), famId: s.familiaId || '', responsavel: s.responsavel || '', excecao: !!s.excecaoUrgencia, dirty: false, condRefs: {} };
+  g('sol-tri-title').textContent = '📋 Triagem — ' + (s.num || 'SOL') + ' · ' + (s.cliente || '');
+  g('sol-tri-sub').textContent = 'Origem: ' + (s.origem || '—') + ' · recebida em ' + (s.dataRecebido ? new Date(s.dataRecebido).toLocaleDateString('pt-BR') : '—');
+  solTriRenderTudo();
+  openModal('modal-sol-triagem');
+}
+function solTriRenderTudo() {
+  solTriRenderCtrl(); solTriRenderResumo(); solTriRenderPerguntas(); solTriRenderPremissas(); solTriRenderTarde(); solTriRenderHist();
+}
+function solTriRenderCtrl() {
+  var s = solTriSol(); var box = g('sol-tri-ctrl');
+  if (!s || !box) return;
+  var fams = solFamiliasAtivas();
+  if (_solTri.famId && !fams.some(function(f) { return f.id === _solTri.famId; })) {
+    var fx = (DB.solFamilias || []).find(function(f) { return f.id === _solTri.famId; });
+    if (fx) fams.push(fx);
+  }
+  var famOpts = '<option value="">— Não classificada —</option>' + fams.map(function(f) { return '<option value="' + _solEsc(f.id) + '"' + (f.id === _solTri.famId ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'; }).join('');
+  var et = solEtapa(s), ei = solEtapaInfo(et);
+  var etOpts = SOL_ETAPAS.map(function(e) { return '<option value="' + e.k + '"' + (e.k === et ? ' selected' : '') + '>' + e.l + '</option>'; }).join('');
+  var nomes = (typeof loadStoredUsers === 'function' ? loadStoredUsers() : (DB.usuarios || [])).filter(function(u) { return u.status !== 'inativo'; }).map(function(u) { return u.nome; });
+  if (_solTri.responsavel && nomes.indexOf(_solTri.responsavel) < 0) nomes.push(_solTri.responsavel);
+  var respOpts = '<option value="">— ninguém —</option>' + nomes.map(function(n) { return '<option' + (n === _solTri.responsavel ? ' selected' : '') + ' value="' + _solEsc(n) + '">' + _solEsc(n) + '</option>'; }).join('');
+  var nivelTxt = '';
+  if (currentUser && currentUser.perfil === 'assistente' && _solTri.famId) nivelTxt = '<span style="font-size:11px;color:var(--muted)">🎓 Seu nível nesta família: <b>' + solNivelDe(currentUser.login, _solTri.famId) + '</b></span>';
+  box.innerHTML =
+    '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;align-items:end">'
+    + '<div class="form-group" style="margin:0"><label>Família de serviço</label><select onchange="solTriMudarFamilia(this.value)">' + famOpts + '</select></div>'
+    + '<div class="form-group" style="margin:0"><label>Responsável pelo preparo</label><select onchange="solTriMudarResp(this.value)">' + respOpts + '</select></div>'
+    + '<div class="form-group" style="margin:0"><label>Etapa atual: <span style="color:' + ei.c + ';font-weight:800">' + ei.l + '</span></label>'
+    + '<div style="display:flex;gap:6px"><select id="sol-tri-etapa-sel" style="flex:1">' + etOpts + '</select><button class="btn btn-primary btn-sm" onclick="solTriAplicarEtapa()">Aplicar</button></div></div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px">'
+    + '<label style="font-size:11px;display:flex;gap:6px;align-items:center"><input type="checkbox"' + (_solTri.excecao ? ' checked' : '') + ' onchange="solTriMudarExcecao(this.checked)"> Preparada diretamente pelo Fabian por urgência (exceção)</label>'
+    + nivelTxt + '</div>';
+}
+function solTriRenderResumo() {
+  var s = solTriSol(); var box = g('sol-tri-resumo');
+  if (!s || !box) return;
+  box.innerHTML = '<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:4px">📝 SOLICITAÇÃO</div>'
+    + '<div style="font-size:12px;white-space:pre-wrap;max-height:90px;overflow:auto">' + (s.desc ? _solEsc(s.desc) : '<em>Sem anotações.</em>') + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:4px">' + (s.contato ? '📞 ' + _solEsc(s.contato) + ' · ' : '') + '📎 ' + ((s.anexos || []).length) + ' anexo(s) <span style="opacity:.8">(abra ✏️ no cartão para ver/editar os anexos)</span></div>';
+}
+function solTriRenderPerguntas() {
+  var s = solTriSol(); var box = g('sol-tri-perguntas');
+  if (!s || !box) return;
+  if (!_solTri.famId) {
+    box.innerHTML = '<div style="padding:18px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--border);border-radius:8px">Esta SOL ainda não tem família de serviço. Escolha uma acima para carregar o questionário.</div>';
+    solTriAtualizarCabecalho(); return;
+  }
+  _solTri.condRefs = {};
+  solPerguntasDaFamilia(_solTri.famId).forEach(function(p) { if (p.cond && p.cond.perguntaId) _solTri.condRefs[p.cond.perguntaId] = true; });
+  var vis = solPerguntasVisiveis({ familiaId: _solTri.famId, respostas: _solTri.resp }, _solTri.famId);
+  box.innerHTML = vis.length ? vis.map(solTriLinhaHTML).join('') : '<div style="padding:14px;color:var(--muted);font-size:12px">Esta família ainda não tem perguntas. Cadastre em ⚙️ Modelos.</div>';
+  solTriAtualizarCabecalho();
+}
+function solTriLinhaHTML(p) {
+  var r = _solTri.resp[p.id] || {};
+  var st = r.s || 'P';
+  var ev = ' onchange="solTriSet(\'' + p.id + '\',\'v\',this.value)"';
+  var inp;
+  if (p.tipo === 'simnao') inp = '<select' + ev + '><option value="">—</option>' + ['Sim','Não'].map(function(o) { return '<option' + (r.v === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>';
+  else if (p.tipo === 'lista') inp = '<select' + ev + '><option value="">—</option>' + (p.opcoes || []).map(function(o) { return '<option value="' + _solEsc(o) + '"' + (r.v === o ? ' selected' : '') + '>' + _solEsc(o) + '</option>'; }).join('') + '</select>';
+  else if (p.tipo === 'numero') inp = '<input type="number" step="any" value="' + _solEsc(r.v || '') + '"' + ev + '>';
+  else inp = '<input type="text" value="' + _solEsc(r.v || '') + '"' + ev + ' placeholder="Resposta...">';
+  var stSel = '<select id="tri-st-' + p.id + '" onchange="solTriSet(\'' + p.id + '\',\'s\',this.value)">'
+    + ['P','C','H','N'].map(function(k) { return '<option value="' + k + '"' + (k === st ? ' selected' : '') + '>' + SOL_STATUS_RESP[k].l + '</option>'; }).join('') + '</select>';
+  return '<div class="tri-q" id="triq-' + p.id + '" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">'
+    + '<div style="font-size:12px;font-weight:700">' + _solEsc(p.texto) + (p.critica ? ' <span style="color:#DC2626" title="Pergunta crítica">★</span>' : '') + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 150px;gap:8px;margin-top:6px">' + inp + stSel + '</div>'
+    + '<div id="tri-meta-' + p.id + '" style="font-size:10px;margin-top:4px">' + solTriMetaTxt(p) + '</div></div>';
+}
+function solTriMetaTxt(p) {
+  var r = _solTri.resp[p.id];
+  var pend = solPerguntaPendente(p, _solTri.resp);
+  var cor = pend ? (p.critica ? '#B91C1C' : '#B45309') : '#64748B';
+  if (!r) return '<span style="color:' + cor + '">' + (p.critica ? 'Crítica — falta responder' : 'Falta responder') + '</span>';
+  if (pend && r.s !== 'P' && r.s) return '<span style="color:#B91C1C">Informe a resposta para ' + SOL_STATUS_RESP[r.s].l.toLowerCase() + '.</span>';
+  var quando = r.d ? new Date(r.d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+  return '<span style="color:' + cor + '">' + (pend ? 'Pendente' : SOL_STATUS_RESP[r.s || 'P'].l) + (r.u ? ' · ' + _solEsc(r.u) : '') + (quando ? ' · ' + quando : '') + '</span>';
+}
+function solTriAtualizarCabecalho() {
+  var box = g('sol-tri-contadores');
+  if (!box || !_solTri) return;
+  var tmp = { familiaId: _solTri.famId, respostas: _solTri.resp };
+  var crit = solCriticasPendentes(tmp).length, pend = solPendentes(tmp).length, hip = solHipoteses(tmp).length;
+  box.innerHTML = '<span style="color:' + (crit ? '#B91C1C' : '#059669') + ';font-weight:700">★ ' + crit + ' crítica(s) pendente(s)</span> · ' + pend + ' pendente(s) · ' + hip + ' hipótese(s)';
+  solTriRenderPremissas();
+}
+function solTriAtualizarLinha(pid) {
+  var p = (DB.solPerguntas || []).find(function(x) { return x.id === pid; });
+  var r = _solTri.resp[pid] || {};
+  var sel = g('tri-st-' + pid); if (sel) sel.value = r.s || 'P';
+  var meta = g('tri-meta-' + pid); if (meta && p) meta.innerHTML = solTriMetaTxt(p);
+  solTriAtualizarCabecalho();
+}
+function solTriSet(pid, campo, valor) {
+  if (!_solTri) return;
+  var r = _solTri.resp[pid] || (_solTri.resp[pid] = { v: '', s: 'P' });
+  if (campo === 'v') {
+    r.v = valor;
+    var tem = String(valor).trim() !== '';
+    // Quem não tem permissão de revisão começa em "Hipótese" — confirmar é uma decisão consciente.
+    if (tem && (!r.s || r.s === 'P')) r.s = temPerm('revisar') ? 'C' : 'H';
+    if (!tem && (r.s === 'C' || r.s === 'H')) r.s = 'P';
+  } else {
+    r.s = valor;
+  }
+  r.d = _solAgora().slice(0, 16);
+  r.u = _solUser();
+  _solTri.dirty = true;
+  if (_solTri.condRefs && _solTri.condRefs[pid]) solTriRenderPerguntas(); else solTriAtualizarLinha(pid);
+  clearTimeout(_solTriTimer);
+  _solTriTimer = setTimeout(function() { if (_solTri && _solTri.dirty) solTriSalvar(true); }, 700);
+}
+function solTriMudarFamilia(id) { _solTri.famId = id; _solTri.dirty = true; solTriRenderPerguntas(); solTriRenderCtrl(); solTriSalvar(true); }
+function solTriMudarResp(nome) { _solTri.responsavel = nome; _solTri.dirty = true; solTriSalvar(true); }
+function solTriMudarExcecao(v) { _solTri.excecao = !!v; _solTri.dirty = true; solTriSalvar(true); }
+
+function solTriRenderPremissas() {
+  var box = g('sol-tri-premissas');
+  if (!box || !_solTri) return;
+  var tmp = { familiaId: _solTri.famId, respostas: _solTri.resp };
+  var hip = solHipoteses(tmp);
+  if (!hip.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="margin-top:12px;padding:10px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A">'
+    + '<div style="font-size:11px;font-weight:800;color:#92400E;margin-bottom:4px">💡 PREMISSAS (hipóteses) — entram nas observações do orçamento</div>'
+    + hip.map(function(p) { var r = _solTri.resp[p.id]; return '<div style="font-size:12px">• ' + _solEsc(p.texto) + (p.critica ? ' <span style="color:#DC2626">★</span>' : '') + ': <b>' + _solEsc(r.v) + '</b></div>'; }).join('') + '</div>';
+}
+function solTriRenderTarde() {
+  var s = solTriSol(); var box = g('sol-tri-tarde');
+  if (!s || !box) return;
+  var l = s.pendenciasTarde || [];
+  if (!l.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="margin-top:12px;padding:10px;border-radius:8px;background:#FEF2F2;border:1px solid #FECACA">'
+    + '<div style="font-size:11px;font-weight:800;color:#991B1B;margin-bottom:4px">⚠️ PENDÊNCIAS DESCOBERTAS TARDE (' + l.length + ')</div>'
+    + l.map(function(x) { return '<div style="font-size:12px">• <b>' + _solEsc(solFamiliaNome(x.famId)) + '</b>: ' + _solEsc(x.motivo) + ' <span style="color:var(--muted);font-size:10px">— ' + _solEsc(x.por) + ', ' + new Date(x.em).toLocaleDateString('pt-BR') + '</span></div>'; }).join('') + '</div>';
+}
+function solTriRenderHist() {
+  var s = solTriSol(); var box = g('sol-tri-hist');
+  if (!s || !box) return;
+  var h = (s.historico || []).slice().reverse();
+  box.innerHTML = h.length ? h.map(function(x) { return '<div style="font-size:11px;padding:2px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">' + new Date(x.em).toLocaleString('pt-BR') + '</span> · ' + _solEsc(x.por) + ' · ' + _solEsc(x.t) + '</div>'; }).join('') : '<div style="font-size:11px;color:var(--muted)">Sem registros.</div>';
+}
+
+function solTriSalvar(silent) {
+  var s = solTriSol();
+  if (!s) return null;
+  clearTimeout(_solTriTimer);
+  var agora = _solAgora();
+  var limpo = {};
+  Object.keys(_solTri.resp).forEach(function(pid) {
+    var r = _solTri.resp[pid];
+    if (!String(r.v || '').trim() && (!r.s || r.s === 'P')) return;
+    limpo[pid] = { v: r.v || '', s: r.s || 'P', d: r.d || '', u: r.u || '' };
+  });
+  var mudouFam = (s.familiaId || '') !== (_solTri.famId || '');
+  var mudouResp = JSON.stringify(s.respostas || {}) !== JSON.stringify(limpo);
+  var mudouOutros = (s.responsavel || '') !== (_solTri.responsavel || '') || !!s.excecaoUrgencia !== !!_solTri.excecao;
+  if (mudouFam) solLog(s, 'Família: ' + solFamiliaNome(s.familiaId) + ' → ' + solFamiliaNome(_solTri.famId));
+  if (mudouResp) {
+    var ult = (s.historico || [])[(s.historico || []).length - 1];
+    var repete = ult && ult.t === 'Respostas atualizadas' && ult.por === _solUser() && (Date.now() - new Date(ult.em)) < 600000;
+    if (!repete) solLog(s, 'Respostas atualizadas');
+  }
+  if (mudouOutros && (s.responsavel || '') !== (_solTri.responsavel || '')) solLog(s, 'Responsável: ' + (_solTri.responsavel || 'ninguém'));
+  if (mudouOutros && !!s.excecaoUrgencia !== !!_solTri.excecao) solLog(s, _solTri.excecao ? 'Marcada como exceção de urgência (preparada pelo Fabian)' : 'Exceção de urgência desmarcada');
+  s.familiaId = _solTri.famId || '';
+  s.respostas = limpo;
+  s.responsavel = _solTri.responsavel || '';
+  s.excecaoUrgencia = !!_solTri.excecao;
+  if (mudouFam || mudouResp || mudouOutros) s._updatedAt = agora;
+  if (mudouResp && solEtapa(s) === 'nova' && Object.keys(limpo).length) solAplicarEtapa(s, 'triagem', 'primeira resposta');
+  _solTri.dirty = false;
+  saveAll(true);
+  renderSolicitacoesTab();
+  updateTopbarSolBadge();
+  if (!silent) showToast('✅ Respostas salvas.');
+  return s;
+}
+function solTriAplicarEtapa() {
+  var s = solTriSalvar(true);
+  if (!s) return;
+  var destino = g('sol-tri-etapa-sel').value;
+  if (destino === solEtapa(s)) { showToast('A SOL já está nessa etapa.', 'info'); return; }
+  var erro = solPodeMudarEtapa(s, destino);
+  if (erro) { alert(erro); solTriRenderCtrl(); return; }
+  solAplicarEtapa(s, destino);
+  saveAll(true);
+  renderSolicitacoesTab();
+  updateTopbarSolBadge();
+  solTriRenderCtrl(); solTriRenderHist();
+  showToast('✅ Etapa: ' + solEtapaInfo(destino).l);
+}
+function fecharSolTriagem() {
+  if (_solTri && _solTri.dirty) solTriSalvar(true);
+  closeModal('modal-sol-triagem');
+}
+
+// ============================================================
+// MENSAGEM AO CLIENTE
+// ============================================================
+function solGerarMensagem() {
+  var s = solTriSalvar(true);
+  if (!s) return;
+  var pend = solPendentes(s).sort(function(a, b) { return (b.critica ? 1 : 0) - (a.critica ? 1 : 0); });
+  if (!s.familiaId) { alert('Escolha a família de serviço antes de gerar a mensagem.'); return; }
+  if (!pend.length) { showToast('Não há perguntas pendentes para enviar ao cliente. 🎉', 'info'); return; }
+  var emp = (typeof getPDFCompanyHTML === 'function' ? getPDFCompanyHTML().name : 'LUMARC');
+  var linhas = pend.map(function(p, i) {
+    var extra = p.tipo === 'lista' ? ' (' + (p.opcoes || []).join(' / ') + ')' : (p.tipo === 'simnao' ? ' (sim ou não)' : '');
+    return (i + 1) + '. ' + p.texto + extra;
+  }).join('\n');
+  var txt = 'Olá! Tudo bem?\n\nAqui é ' + _solUser() + ', da ' + emp + '. Para elaborarmos o seu orçamento (ref. ' + (s.num || '') + '), precisamos confirmar algumas informações:\n\n'
+    + linhas + '\n\nAssim que recebermos, retornamos com a proposta. Qualquer dúvida, estamos à disposição!\n\nAtenciosamente,\n' + _solUser() + '\n' + emp;
+  g('sol-msg-id').value = s.id;
+  g('sol-msg-n').value = String(pend.length);
+  g('sol-msg-texto').value = txt;
+  openModal('modal-sol-msg');
+}
+function solMsgCopiar() {
+  var s = (DB.solicitacoesOrc || []).find(function(x) { return x.id === g('sol-msg-id').value; });
+  if (!s) return;
+  var ta = g('sol-msg-texto');
+  var finalizar = function() {
+    s.msgClienteEm = _solAgora();
+    s._updatedAt = s.msgClienteEm;
+    solLog(s, 'Mensagem ao cliente gerada e copiada (' + (g('sol-msg-n').value || '?') + ' pergunta(s))');
+    if (['nova', 'triagem', 'aguardando_cliente', 'pronta'].indexOf(solEtapa(s)) >= 0) solAplicarEtapa(s, 'aguardando_cliente', 'mensagem enviada');
+    saveAll(true);
+    renderSolicitacoesTab();
+    updateTopbarSolBadge();
+    closeModal('modal-sol-msg');
+    if (_solTri && _solTri.id === s.id) { solTriRenderCtrl(); solTriRenderHist(); }
+    showToast('📋 Mensagem copiada — cole no WhatsApp/e-mail. Etapa: Aguardando cliente.');
+  };
+  var fallback = function() {
+    try { ta.focus(); ta.select(); document.execCommand('copy'); finalizar(); }
+    catch (e) { alert('Não foi possível copiar automaticamente. Selecione o texto e copie manualmente (Ctrl+C).'); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(finalizar, fallback);
+  else fallback();
+}
+
+// ============================================================
+// PENDÊNCIA DESCOBERTA TARDE (SOL e OS)
+// ============================================================
+function _solAlvoPT(tipo, ref) {
+  if (tipo === 'sol') return (DB.solicitacoesOrc || []).find(function(x) { return x.id === ref; });
+  return (DB.ordens || []).find(function(x) { return x.id === ref; });
+}
+function abrirPendTarde(tipo, ref) {
+  var alvo = ref ? _solAlvoPT(tipo, ref) : null;
+  if (!alvo) { showToast(tipo === 'os' ? 'Salve a OS primeiro para registrar a pendência.' : 'SOL não encontrada.', 'warn'); return; }
+  var famPadrao = '';
+  if (tipo === 'sol') famPadrao = alvo.familiaId || '';
+  else {
+    var orc = (DB.orcamentos || []).find(function(o) { return o.num === alvo.orcRef; });
+    var sol = orc && orc.solId ? (DB.solicitacoesOrc || []).find(function(x) { return x.id === orc.solId; }) : null;
+    famPadrao = sol ? (sol.familiaId || '') : '';
+  }
+  g('pt-tipo').value = tipo; g('pt-ref').value = ref; g('pt-motivo').value = '';
+  g('pt-familia').innerHTML = '<option value="">— Não classificada —</option>' + solFamiliasAtivas().map(function(f) { return '<option value="' + _solEsc(f.id) + '"' + (f.id === famPadrao ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'; }).join('');
+  openModal('modal-pend-tarde');
+}
+function salvarPendTarde() {
+  var tipo = g('pt-tipo').value, ref = g('pt-ref').value;
+  var alvo = _solAlvoPT(tipo, ref);
+  var motivo = g('pt-motivo').value.trim();
+  if (!alvo) return;
+  if (!motivo) { alert('Descreva o que deveria ter sido perguntado/verificado antes.'); return; }
+  if (!alvo.pendenciasTarde) alvo.pendenciasTarde = [];
+  alvo.pendenciasTarde.push({ id: 'pt-' + Date.now().toString(36), famId: g('pt-familia').value, motivo: motivo, em: _solAgora(), por: _solUser() });
+  alvo._updatedAt = _solAgora();
+  if (tipo === 'sol') solLog(alvo, 'Pendência descoberta tarde registrada');
+  saveAll(true);
+  closeModal('modal-pend-tarde');
+  if (tipo === 'sol' && _solTri && _solTri.id === ref) { solTriRenderTarde(); solTriRenderHist(); }
+  if (tipo === 'os') solAtualizarContadorPTOS();
+  showToast('⚠️ Pendência registrada — vai alimentar as sugestões de novas perguntas.');
+}
+function solAtualizarContadorPTOS() {
+  var el = g('mos-pt-count');
+  if (!el) return;
+  var os = (typeof DB.editOSIdx === 'number' && DB.editOSIdx >= 0) ? DB.ordens[DB.editOSIdx] : null;
+  var n = os && os.pendenciasTarde ? os.pendenciasTarde.length : 0;
+  el.textContent = n ? '(' + n + ' registrada' + (n > 1 ? 's' : '') + ')' : '';
+}
+
+// ============================================================
+// MODELOS: famílias, perguntas e autonomia
+// ============================================================
+function abrirSolModelos() {
+  if (!temPerm('solcfg')) { showToast('Sem permissão para editar os modelos.', 'warn'); return; }
+  _smTab = 'fam'; _smEdit = null;
+  solMdRender();
+  openModal('modal-sol-modelos');
+}
+function solMdTab(t) { _smTab = t; _smEdit = null; solMdRender(); }
+function solMdRender() {
+  var tabs = [['fam', '🏷️ Famílias'], ['perg', '❓ Perguntas'], ['aut', '🎓 Autonomia']];
+  g('sm-tabs').innerHTML = tabs.map(function(t) {
+    return '<button class="btn ' + (_smTab === t[0] ? 'btn-primary' : 'btn-ghost') + ' btn-sm" onclick="solMdTab(\'' + t[0] + '\')">' + t[1] + '</button>';
+  }).join(' ');
+  g('sm-body').innerHTML = _smTab === 'fam' ? solMdHtmlFam() : (_smTab === 'perg' ? solMdHtmlPerg() : solMdHtmlAut());
+}
+function solMdHtmlFam() {
+  var fams = (DB.solFamilias || []).slice().sort(_solOrd);
+  var rows = fams.map(function(f) {
+    var n = (DB.solPerguntas || []).filter(function(p) { return p.ativa !== false && (p.familias || []).indexOf(f.id) >= 0; }).length;
+    return '<tr><td><input type="text" value="' + _solEsc(f.nome) + '" style="width:100%" onchange="solMdFamSet(\'' + f.id + '\',\'nome\',this.value)"></td>'
+      + '<td style="text-align:center">' + n + (n > 12 ? ' <span style="color:#B45309" title="Recomendado até 12">⚠️</span>' : '') + '</td>'
+      + '<td style="text-align:center"><input type="number" value="' + (f.ordem || 0) + '" style="width:60px" onchange="solMdFamSet(\'' + f.id + '\',\'ordem\',this.value)"></td>'
+      + '<td style="text-align:center"><input type="checkbox"' + (f.ativa !== false ? ' checked' : '') + ' onchange="solMdFamSet(\'' + f.id + '\',\'ativa\',this.checked)"></td></tr>';
+  }).join('');
+  return '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--muted);font-size:10px"><th>FAMÍLIA</th><th style="text-align:center">PERGUNTAS ATIVAS</th><th style="text-align:center">ORDEM</th><th style="text-align:center">ATIVA</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="display:flex;gap:8px;margin-top:12px"><input type="text" id="sm-fam-novo" placeholder="Nova família..." style="flex:1"><button class="btn btn-primary btn-sm" onclick="solMdFamAdd()">+ Adicionar</button></div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-top:8px">Famílias e perguntas nunca são apagadas — desative para tirar de uso (evita problemas de sincronização entre computadores).</div>';
+}
+function solMdFamSet(id, campo, val) {
+  var f = (DB.solFamilias || []).find(function(x) { return x.id === id; });
+  if (!f) return;
+  if (campo === 'nome') { val = String(val).trim(); if (!val) { solMdRender(); return; } f.nome = val; }
+  else if (campo === 'ordem') f.ordem = parseInt(val) || 0;
+  else if (campo === 'ativa') f.ativa = !!val;
+  f._updatedAt = _solAgora();
+  saveAll(true);
+}
+function solMdFamAdd() {
+  var nome = g('sm-fam-novo').value.trim();
+  if (!nome) return;
+  if ((DB.solFamilias || []).some(function(f) { return String(f.nome).toLowerCase() === nome.toLowerCase(); })) { showToast('Já existe uma família com esse nome.', 'warn'); return; }
+  var ordem = (DB.solFamilias || []).reduce(function(m, f) { return Math.max(m, f.ordem || 0); }, 0) + 1;
+  DB.solFamilias.push({ id: 'fam-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), nome: nome, ordem: ordem, ativa: true, _updatedAt: _solAgora() });
+  saveAll(true);
+  solMdRender();
+}
+function solMdHtmlPerg() {
+  var fams = (DB.solFamilias || []).slice().sort(_solOrd);
+  var lista = (DB.solPerguntas || []).filter(function(p) { return !_smFiltro || (p.familias || []).indexOf(_smFiltro) >= 0; }).sort(_solOrd);
+  var h = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><select onchange="_smFiltro=this.value;solMdRender()"><option value="">Todas as famílias</option>'
+    + fams.map(function(f) { return '<option value="' + _solEsc(f.id) + '"' + (f.id === _smFiltro ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'; }).join('')
+    + '</select><button class="btn btn-primary btn-sm" onclick="solMdPergEditar(\'\')">+ Nova pergunta</button></div>';
+  if (_smEdit) h += solMdHtmlEditor();
+  h += '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--muted);font-size:10px"><th>#</th><th>PERGUNTA</th><th>TIPO</th><th>FAMÍLIAS</th><th style="text-align:center">ATIVA</th><th></th></tr></thead><tbody>'
+    + lista.map(function(p) {
+      var cond = p.cond && p.cond.perguntaId ? '<div style="font-size:10px;color:var(--muted)">↳ só se "' + _solEsc(((DB.solPerguntas || []).find(function(x) { return x.id === p.cond.perguntaId; }) || {}).texto || '?') + '" = ' + _solEsc((p.cond.valores || []).join(' ou ')) + '</div>' : '';
+      return '<tr style="border-top:1px solid var(--border)"><td>' + (p.ordem || 0) + '</td><td>' + _solEsc(p.texto) + (p.critica ? ' <span style="color:#DC2626">★</span>' : '') + cond + '</td><td>' + p.tipo + '</td>'
+        + '<td style="font-size:10px">' + (p.familias || []).map(function(f) { return _solEsc(solFamiliaNome(f)); }).join(', ') + '</td>'
+        + '<td style="text-align:center"><input type="checkbox"' + (p.ativa !== false ? ' checked' : '') + ' onchange="solMdPergAtiva(\'' + p.id + '\',this.checked)"></td>'
+        + '<td><button class="btn btn-ghost btn-xs" onclick="solMdPergEditar(\'' + p.id + '\')">✏️</button></td></tr>';
+    }).join('') + '</tbody></table>';
+  return h;
+}
+function solMdPergAtiva(id, v) {
+  var p = (DB.solPerguntas || []).find(function(x) { return x.id === id; });
+  if (!p) return;
+  p.ativa = !!v; p._updatedAt = _solAgora();
+  saveAll(true); updateTopbarSolBadge(); renderSolicitacoesTab();
+}
+function solMdPergEditar(id) {
+  var p = id ? (DB.solPerguntas || []).find(function(x) { return x.id === id; }) : null;
+  _smEdit = p
+    ? { id: p.id, texto: p.texto, tipo: p.tipo, opcoes: (p.opcoes || []).join(', '), critica: !!p.critica, ativa: p.ativa !== false, ordem: p.ordem || 0, familias: (p.familias || []).slice(), condPerg: p.cond ? p.cond.perguntaId : '', condVal: p.cond ? (p.cond.valores || []).join(', ') : '' }
+    : { id: '', texto: '', tipo: 'texto', opcoes: '', critica: false, ativa: true, ordem: 0, familias: _smFiltro ? [_smFiltro] : [], condPerg: '', condVal: '' };
+  solMdRender();
+}
+function solMdHtmlEditor() {
+  var e = _smEdit;
+  var fams = (DB.solFamilias || []).slice().sort(_solOrd);
+  var outras = (DB.solPerguntas || []).filter(function(p) { return p.id !== e.id; }).sort(_solOrd);
+  return '<div style="border:2px solid var(--accent);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--bg)">'
+    + '<div style="font-size:11px;font-weight:800;margin-bottom:8px">' + (e.id ? 'EDITAR PERGUNTA' : 'NOVA PERGUNTA') + '</div>'
+    + '<div class="form-grid">'
+    + '<div class="form-group full"><label>Texto da pergunta</label><input type="text" id="sm-e-texto" value="' + _solEsc(e.texto) + '"></div>'
+    + '<div class="form-group"><label>Tipo de resposta</label><select id="sm-e-tipo" onchange="g(\'sm-e-op-wrap\').style.display=this.value===\'lista\'?\'\':\'none\'">'
+    + [['texto', 'Texto'], ['numero', 'Número'], ['simnao', 'Sim / Não'], ['lista', 'Lista de opções']].map(function(t) { return '<option value="' + t[0] + '"' + (e.tipo === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>'
+    + '<div class="form-group" id="sm-e-op-wrap" style="display:' + (e.tipo === 'lista' ? '' : 'none') + '"><label>Opções (separadas por vírgula)</label><input type="text" id="sm-e-opcoes" value="' + _solEsc(e.opcoes) + '"></div>'
+    + '<div class="form-group"><label>Ordem</label><input type="number" id="sm-e-ordem" value="' + e.ordem + '"></div>'
+    + '<div class="form-group"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="sm-e-crit"' + (e.critica ? ' checked' : '') + '> ★ Pergunta crítica (bloqueia "Pronta para orçar")</label>'
+    + '<label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="sm-e-ativa"' + (e.ativa ? ' checked' : '') + '> Ativa</label></div>'
+    + '<div class="form-group full"><label>Famílias a que se aplica</label><div style="display:flex;flex-wrap:wrap;gap:10px">'
+    + fams.map(function(f) { return '<label style="font-size:11px;display:flex;gap:4px;align-items:center"><input type="checkbox" id="sm-e-fam-' + f.id + '"' + (e.familias.indexOf(f.id) >= 0 ? ' checked' : '') + '> ' + _solEsc(f.nome) + '</label>'; }).join('') + '</div></div>'
+    + '<div class="form-group"><label>Só mostrar se a pergunta…</label><select id="sm-e-cp"><option value="">(sempre mostrar)</option>'
+    + outras.map(function(p) { return '<option value="' + _solEsc(p.id) + '"' + (e.condPerg === p.id ? ' selected' : '') + '>' + _solEsc(p.texto.slice(0, 60)) + '</option>'; }).join('') + '</select></div>'
+    + '<div class="form-group"><label>…tiver a resposta (valores separados por vírgula)</label><input type="text" id="sm-e-cv" value="' + _solEsc(e.condVal) + '"></div>'
+    + '</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="_smEdit=null;solMdRender()">Cancelar</button><button class="btn btn-primary btn-sm" onclick="solMdPergSalvar()">💾 Salvar pergunta</button></div></div>';
+}
+function solMdPergSalvar() {
+  var e = _smEdit;
+  if (!e) return;
+  var texto = g('sm-e-texto').value.trim();
+  if (!texto) { alert('Informe o texto da pergunta.'); return; }
+  var tipo = g('sm-e-tipo').value;
+  var opcoes = g('sm-e-opcoes').value.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  if (tipo === 'lista' && !opcoes.length) { alert('Informe as opções da lista, separadas por vírgula.'); return; }
+  var fams = (DB.solFamilias || []).filter(function(f) { var c = g('sm-e-fam-' + f.id); return c && c.checked; }).map(function(f) { return f.id; });
+  if (!fams.length) { alert('Marque ao menos uma família.'); return; }
+  var ativa = g('sm-e-ativa').checked;
+  if (ativa) {
+    var estoura = [];
+    fams.forEach(function(fid) {
+      var n = (DB.solPerguntas || []).filter(function(p) { return p.ativa !== false && p.id !== e.id && (p.familias || []).indexOf(fid) >= 0; }).length + 1;
+      if (n > 12) estoura.push(solFamiliaNome(fid) + ' (' + n + ')');
+    });
+    if (estoura.length && !confirm('Recomendado até 12 perguntas por família. Ficará acima em: ' + estoura.join(', ') + '.\n\nSalvar mesmo assim?')) return;
+  }
+  var cp = g('sm-e-cp').value;
+  var cv = g('sm-e-cv').value.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  if (cp && !cv.length) { alert('Informe o(s) valor(es) da condição.'); return; }
+  var obj = { texto: texto, tipo: tipo, opcoes: tipo === 'lista' ? opcoes : [], critica: g('sm-e-crit').checked, familias: fams, cond: cp ? { perguntaId: cp, valores: cv } : null, ordem: parseInt(g('sm-e-ordem').value) || 0, ativa: ativa, _updatedAt: _solAgora() };
+  if (e.id) {
+    var p = (DB.solPerguntas || []).find(function(x) { return x.id === e.id; });
+    if (p) Object.assign(p, obj);
+  } else {
+    obj.id = 'perg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    if (!obj.ordem) obj.ordem = (DB.solPerguntas || []).filter(function(p) { return (p.familias || []).some(function(f) { return fams.indexOf(f) >= 0; }); }).length + 1;
+    DB.solPerguntas.push(obj);
+  }
+  saveAll(true);
+  _smEdit = null;
+  solMdRender();
+  updateTopbarSolBadge();
+  renderSolicitacoesTab();
+  showToast('✅ Pergunta salva.');
+}
+function solMdHtmlAut() {
+  var users = (typeof loadStoredUsers === 'function' ? loadStoredUsers() : (DB.usuarios || [])).filter(function(u) { return u.perfil === 'assistente' && u.status !== 'inativo'; });
+  if (!users.length) return '<div style="padding:18px;color:var(--muted);font-size:12px">Nenhum usuário com perfil <b>Assistente Técnico</b>. Crie em Configurações → Usuários (ex.: o Lucas) e volte aqui para definir o nível.</div>';
+  var fams = solFamiliasAtivas();
+  var sel = function(login, famId, atual, geral) {
+    return '<select onchange="solMdAut(\'' + login + '\',\'' + famId + '\',this.value)">'
+      + (geral ? '' : '<option value="0"' + (!atual ? ' selected' : '') + '>herda</option>')
+      + [1, 2, 3].map(function(n) { return '<option value="' + n + '"' + (atual === n ? ' selected' : '') + '>Nível ' + n + '</option>'; }).join('') + '</select>';
+  };
+  return '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Nível 1: Fabian valida 100% · Nível 2: preparação com validação · Nível 3: autonomia parcial por família. Todo assistente começa no Nível 1. Cada alteração fica no histórico. (Nesta fase o nível é registrado e exibido; as regras por nível entram com a ficha de preparação.)</div>'
+    + users.map(function(u) {
+      var geral = (DB.autonomias || []).find(function(a) { return a.login === u.login && a.familiaId === '*'; });
+      return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + _solEsc(u.nome) + '</b><span style="font-size:11px">Nível geral: ' + sel(u.login, '*', geral && geral.nivel > 0 ? geral.nivel : 1, true) + '</span></div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-top:8px">'
+        + fams.map(function(f) {
+          var rec = (DB.autonomias || []).find(function(a) { return a.login === u.login && a.familiaId === f.id; });
+          return '<div style="font-size:11px;display:flex;justify-content:space-between;gap:6px;align-items:center"><span>' + _solEsc(f.nome) + '</span>' + sel(u.login, f.id, rec && rec.nivel > 0 ? rec.nivel : 0, false) + '</div>';
+        }).join('') + '</div></div>';
+    }).join('');
+}
+function solMdAut(login, famId, nivel) {
+  if (!temPerm('revisar')) { showToast('Só quem revisa pode alterar níveis.', 'warn'); solMdRender(); return; }
+  var nv = parseInt(nivel) || 0;
+  var motivo = prompt('Motivo da alteração de nível (opcional):', '');
+  if (motivo === null) { solMdRender(); return; }
+  var id = 'aut-' + login + '-' + (famId === '*' ? 'geral' : famId);
+  var rec = (DB.autonomias || []).find(function(a) { return a.id === id; });
+  var ev = { nivel: nv, em: _solAgora(), por: _solUser(), motivo: motivo || '' };
+  if (!rec) {
+    rec = { id: id, login: login, familiaId: famId, nivel: nv, desde: ev.em, definidoPor: ev.por, motivo: ev.motivo, historico: [ev] };
+    DB.autonomias.push(rec);
+  } else {
+    rec.nivel = nv; rec.desde = ev.em; rec.definidoPor = ev.por; rec.motivo = ev.motivo;
+    if (!rec.historico) rec.historico = [];
+    rec.historico.push(ev);
+  }
+  rec._updatedAt = ev.em;
+  saveAll(true);
+  solMdRender();
+  showToast('✅ Nível atualizado.');
+}
+
 function abrirModalSolicitacao(id) {
   _solEditId = id || null;
   var sol = id ? (DB.solicitacoesOrc||[]).find(function(s){return s.id===id;}) : null;
@@ -21122,6 +22052,7 @@ function abrirModalSolicitacao(id) {
   g('sol-contato').value = sol ? (sol.contato||'') : '';
   g('sol-origem').value  = sol ? (sol.origem||'whatsapp') : 'whatsapp';
   g('sol-desc').value    = sol ? (sol.desc||'') : '';
+  solPreencherSelectFamilia(sol);
   _solAnexosTemp = sol ? (sol.anexos||[]).map(function(a){ return Object.assign({}, a); }) : [];
   renderSolAnexos();
 
@@ -21201,9 +22132,15 @@ function salvarSolicitacao() {
   var now = new Date().toISOString();
   var id = g('sol-id').value;
   var num = g('sol-num-hidden').value;
+  var famSel = g('sol-familia') ? g('sol-familia').value : '';
+  var _solAtual = id ? DB.solicitacoesOrc.find(function(x){return x.id===id;}) : null;
+  // Nova SOL (ou SOL que já tinha família) exige família; SOL antiga sem família continua abrindo normalmente.
+  if (!famSel && !(id && _solAtual && !_solAtual.familiaId)) { alert('Escolha a família de serviço.'); return; }
+  var _novoId = 'solreq-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
   if (id) {
     var sol = DB.solicitacoesOrc.find(function(s){return s.id===id;});
     if (sol) {
+      if (famSel && famSel !== (sol.familiaId||'')) { solLog(sol, 'Família: ' + solFamiliaNome(sol.familiaId) + ' → ' + solFamiliaNome(famSel)); sol.familiaId = famSel; }
       sol.cliente = cliente;
       sol.contato = g('sol-contato').value.trim();
       sol.origem  = g('sol-origem').value;
@@ -21214,7 +22151,12 @@ function salvarSolicitacao() {
     }
   } else {
     DB.solicitacoesOrc.push({
-      id: 'solreq-' + Date.now() + '-' + Math.random().toString(36).slice(2,9),
+      id: _novoId,
+      familiaId: famSel,
+      etapa: 'nova',
+      respostas: {},
+      responsavel: currentUser ? currentUser.nome : '',
+      historico: [{ em: now, por: currentUser ? currentUser.nome : 'Sistema', t: 'SOL criada', e: 'nova' }],
       num: num,
       cliente: cliente,
       contato: g('sol-contato').value.trim(),
@@ -21232,6 +22174,7 @@ function salvarSolicitacao() {
   renderSolicitacoesTab();
   updateTopbarSolBadge();
   showToast('✅ Solicitação salva!');
+  if (!id && famSel) abrirSolTriagem(_novoId);
 }
 
 function excluirSolicitacao(id) {
@@ -21250,7 +22193,19 @@ function excluirSolicitacao(id) {
 function construirOrcamentoDeSolicitacao(id) {
   var sol = (DB.solicitacoesOrc||[]).find(function(s){return s.id===id;});
   if (!sol) return;
+  if (sol.familiaId) {
+    var _et = solEtapa(sol);
+    if (['pronta','preparacao','revisao','revisada','proposta'].indexOf(_et) < 0) {
+      if (!temPerm('revisar')) {
+        alert('Esta SOL ainda não está "Pronta para orçar" (etapa atual: ' + solEtapaInfo(_et).l + ').\n\nConclua a triagem — perguntas críticas resolvidas — e marque a etapa antes de construir o orçamento.');
+        return;
+      }
+      if (!confirm('Esta SOL ainda não está "Pronta para orçar" (etapa atual: ' + solEtapaInfo(_et).l + ').\n\nConstruir o orçamento mesmo assim?')) return;
+    }
+  }
   if (!confirm('Iniciar um novo orçamento para "' + sol.cliente + '"?\n\nEla sairá da fila de pendentes agora.')) return;
+  if (['nova','triagem','aguardando_cliente','pronta'].indexOf(solEtapa(sol)) >= 0) solAplicarEtapa(sol, 'preparacao', 'orçamento iniciado');
+  solLog(sol, 'Orçamento iniciado a partir da SOL');
   sol.status = 'convertido';
   sol.convertidoEm = new Date().toISOString();
   sol._updatedAt = new Date().toISOString();
@@ -21262,16 +22217,23 @@ function construirOrcamentoDeSolicitacao(id) {
     clearOrc(true);
     if (g('c-nome'))   g('c-nome').value   = sol.cliente;
     if (g('c-contato'))g('c-contato').value= sol.contato || '';
-    if (g('o-obs') && sol.desc) g('o-obs').value = 'Solicitação original (' + (sol.origem||'') + '): ' + sol.desc;
+    var _obsSol = sol.desc ? 'Solicitação original (' + (sol.origem||'') + '): ' + sol.desc : '';
+    var _hip = solHipoteses(sol);
+    if (_hip.length) {
+      _obsSol += (_obsSol ? '\n\n' : '') + 'PREMISSAS (a confirmar com o cliente):\n' + _hip.map(function(p){ var r = sol.respostas[p.id]; return '- ' + p.texto + ': ' + r.v; }).join('\n');
+    }
+    if (g('o-obs') && _obsSol) g('o-obs').value = _obsSol;
+    _orcSolRef = { id: sol.id, num: sol.num || '' };
     showToast('📋 Orçamento iniciado a partir da solicitação de ' + sol.cliente + '!');
   }, 150);
 }
 
 function renderSolicitacoesTab() {
+  var _bm = g('sol-btn-modelos'); if (_bm) _bm.style.display = temPerm('solcfg') ? '' : 'none';
   var lista = DB.solicitacoesOrc || [];
   var pendentes = lista.filter(function(s){return s.status==='pendente';})
     .sort(function(a,b){ return new Date(a.dataRecebido) - new Date(b.dataRecebido); });
-  var convertidas = lista.filter(function(s){return s.status==='convertido';})
+  var convertidas = lista.filter(function(s){return s.status==='convertido' || s.status==='encerrada';})
     .sort(function(a,b){ return new Date(b.convertidoEm||b._updatedAt||0) - new Date(a.convertidoEm||a._updatedAt||0); })
     .slice(0, 12);
 
@@ -21279,7 +22241,9 @@ function renderSolicitacoesTab() {
   if (kpisEl) {
     kpisEl.innerHTML = [
       { icon:'🗒️', val:pendentes.length,   lbl:'Pendentes',   cls: pendentes.length>0 ? 'orange' : 'blue' },
-      { icon:'✅', val:convertidas.length, lbl:'Convertidas (recentes)', cls:'green' },
+      { icon:'✅', val:convertidas.length, lbl:'Em andamento (recentes)', cls:'green' },
+      { icon:'❗', val:pendentes.filter(function(s){ return s.familiaId && solEtapa(s)!=='aguardando_cliente' && solCriticasPendentes(s).length>0; }).length, lbl:'Com crítica pendente', cls:'orange' },
+      { icon:'⏳', val:pendentes.filter(function(s){ return solEtapa(s)==='aguardando_cliente'; }).length, lbl:'Aguardando cliente', cls:'blue' },
     ].map(function(k) {
       return '<div class="d-kpi ' + k.cls + '"><div class="d-kpi-icon">' + k.icon + '</div><div class="d-kpi-val">' + k.val + '</div><div class="d-kpi-lbl">' + k.lbl + '</div></div>';
     }).join('');
@@ -21307,12 +22271,14 @@ function renderSolicitacoesTab() {
           + '<div style="font-weight:800;font-size:14px;color:#78350F">' + (s.cliente||'—') + '</div>'
           + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + oi.cor + '22;color:' + oi.cor + ';font-weight:700;white-space:nowrap">' + oi.icon + ' ' + oi.label + '</span>'
           + '</div>'
-          + (s.num ? '<div style="font-size:10px;color:#B45309;font-weight:700;font-family:var(--mono);margin-bottom:8px">' + s.num + '</div>' : '')
+          + (s.num ? '<div style="font-size:10px;color:#B45309;font-weight:700;font-family:var(--mono);margin-bottom:4px">' + s.num + '</div>' : '')
+          + solCardMeta(s)
           + (s.contato ? '<div style="font-size:11px;color:#92400E;margin-bottom:6px">📞 ' + s.contato + '</div>' : '')
           + '<div style="font-size:12px;color:#451A03;margin-bottom:8px;white-space:pre-wrap;max-height:80px;overflow:auto">' + (s.desc ? s.desc.replace(/</g,'&lt;') : '<em style="color:#92400E">Sem anotações</em>') + '</div>'
           + (qtdAnexos ? '<div style="font-size:11px;color:#92400E;margin-bottom:6px">📎 ' + qtdAnexos + ' anexo(s)</div>' : '')
           + '<div style="font-size:10px;color:' + (dias>=3?'#B91C1C':'#92400E') + ';font-weight:' + (dias>=3?'700':'400') + ';margin-bottom:10px">Recebido há ' + dias + ' dia(s)' + (dias>=3?' ⚠️':'') + '</div>'
           + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          + '<button class="btn btn-ghost btn-xs" onclick="abrirSolTriagem(\'' + s.id + '\')">📋 Triagem</button>'
           + '<button class="btn btn-primary btn-xs" onclick="construirOrcamentoDeSolicitacao(\'' + s.id + '\')">🔧 Construir Orçamento</button>'
           + '<button class="btn btn-ghost btn-xs" onclick="abrirModalSolicitacao(\'' + s.id + '\')">✏️</button>'
           + '<button class="btn btn-danger btn-xs" onclick="excluirSolicitacao(\'' + s.id + '\')">×</button>'
@@ -21328,7 +22294,8 @@ function renderSolicitacoesTab() {
       ? convertidas.map(function(s) {
           return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;opacity:.7;font-size:11px">'
             + '<div style="font-weight:700">' + (s.cliente||'—') + (s.num ? ' <span style="font-family:var(--mono);font-weight:400">(' + s.num + ')</span>' : '') + '</div>'
-            + '<div style="color:var(--muted)">✅ convertido em ' + new Date(s.convertidoEm||s._updatedAt).toLocaleDateString('pt-BR') + '</div>'
+            + '<div style="color:var(--muted)">' + (s.status==='encerrada' ? '🏁 encerrada' : '✅ orçamento iniciado') + ' em ' + new Date(s.convertidoEm||s._updatedAt).toLocaleDateString('pt-BR') + '</div>'
+            + solMiniEtapa(s)
             + '</div>';
         }).join('')
       : '<div style="grid-column:1/-1;color:var(--muted);font-size:12px">Nenhuma ainda.</div>';
@@ -21367,6 +22334,8 @@ var _pendenciasInfo = {
   orc:      { label: 'Orçamento(s) aguardando aprovação',      icone:'📋', count:0, cor:'#FCD34D' },
   envio:    { label: 'Orçamento(s) aguardando envio',          icone:'📧', count:0, cor:'#86EFAC' },
   sol:      { label: 'Solicitação(ões) de orçamento pendente(s)', icone:'🗒️', count:0, cor:'#FDE68A' },
+  solcrit:  { label: 'SOL(s) com pergunta crítica pendente',   icone:'❗', count:0, cor:'#FCA5A5' },
+  solcli:   { label: 'SOL(s) aguardando cliente há +2 dias',   icone:'⏳', count:0, cor:'#FDBA74' },
   rcpc:     { label: 'RC(s) aguardando Pedido de Compra',      icone:'🛒', count:0, cor:'#FDBA74' },
   pcreceb:  { label: 'Pedido(s) de Compra aguardando recebimento', icone:'📦', count:0, cor:'#93C5FD' },
   osaguard: { label: 'OS aguardando ação (Engenharia/Compra/Material)', icone:'🔧', count:0, cor:'#C4B5FD' },
@@ -21374,6 +22343,7 @@ var _pendenciasInfo = {
 };
 
 function renderTopbarPendencias() {
+  if (typeof aplicarModulosNaNav === 'function') aplicarModulosNaNav();
   var total = Object.keys(_pendenciasInfo).reduce(function(s,k){ return s + (_pendenciasInfo[k].count||0); }, 0);
   var badge = g('topbar-pend-badge');
   var count = g('topbar-pend-count');
@@ -21398,7 +22368,7 @@ function pendenciaItemClick(key) {
   toggleTopbarPendencias();
   if (key === 'orc') { irParaOrcamentosFiltrado('aguardando'); return; }
   if (key === 'envio') { irParaOrcamentosFiltrado('liberado'); return; }
-  if (key === 'sol') { goToTab('tab-solicitacoes'); return; }
+  if (key === 'sol' || key === 'solcrit' || key === 'solcli') { goToTab('tab-solicitacoes'); return; }
   if (key === 'rc' || key === 'rcpc') { goToTab('tab-rc'); return; }
   if (key === 'pcreceb') { goToTab('tab-compras'); return; }
   if (key === 'osaguard' || key === 'osfat') { goToTab('tab-os'); return; }
@@ -21441,6 +22411,13 @@ function updateTopbarEnvioBadge() {
 function updateTopbarSolBadge() {
   var pendentes = (DB.solicitacoesOrc || []).filter(function(s) { return s.status === 'pendente'; });
   _pendenciasInfo.sol.count = pendentes.length;
+  var agora = Date.now();
+  _pendenciasInfo.solcrit.count = pendentes.filter(function(s) {
+    return s.familiaId && solEtapa(s) !== 'aguardando_cliente' && solCriticasPendentes(s).length > 0;
+  }).length;
+  _pendenciasInfo.solcli.count = pendentes.filter(function(s) {
+    return solEtapa(s) === 'aguardando_cliente' && s.msgClienteEm && (agora - new Date(s.msgClienteEm)) > 2 * 86400000;
+  }).length;
   renderTopbarPendencias();
 }
 
@@ -21471,7 +22448,7 @@ function updateTopbarOSAguardBadge() {
 
 function updateTopbarOSFatBadge() {
   var pendentes = (DB.ordens || []).filter(function(o) { return o.status === 'Concluída' || o.status === 'Entregue'; });
-  _pendenciasInfo.osfat.count = pendentes.length;
+  _pendenciasInfo.osfat.count = moduloAtivo('fin') ? pendentes.length : 0;
   renderTopbarPendencias();
 }
 
@@ -26048,7 +27025,7 @@ function confirmarRecebimento(completo) {
       var estoqueAntes = parseFloat(mat.estoque)||0;
       mat.estoque = estoqueAntes + it.qtdFisica;
       if (!DB.almMovimentos) DB.almMovimentos=[];
-      DB.almMovimentos.push({
+      _almPush({
           id: 'mov-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'-6',
         tipo:'entrada', matIdx, matDesc:mat.desc, matCod:mat.cod||'',
         un: mat.unUso||mat.un||'',
@@ -26067,7 +27044,7 @@ function confirmarRecebimento(completo) {
   // 4. Create / update Conta a Pagar — respeita exclusões intencionais
   var tombstoneKeyPCRec1 = 'autocp-pc-' + pc.num;
   var cpExisting = (DB.contasPagar||[]).find(function(p){ return p.nf===pc.num; });
-  if (!cpExisting && !(DB._tombstones && DB._tombstones[tombstoneKeyPCRec1])) {
+  if (moduloAtivo('fin') && !cpExisting && !(DB._tombstones && DB._tombstones[tombstoneKeyPCRec1])) {
     if (!DB.contasPagar) DB.contasPagar=[];
     DB.contasPagar.push({
       id:      tombstoneKeyPCRec1,
@@ -26698,7 +27675,7 @@ function confirmarAlmRecebimento(completo) {
       var estoqueAntes = parseFloat(mat.estoque)||0;
       mat.estoque = estoqueAntes + it.qtdFisica;
       var loteRec = g('alm-rec-lote') ? g('alm-rec-lote').value.trim() : '';
-      DB.almMovimentos.push({
+      _almPush({
           id: 'mov-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'-7',
         tipo:'entrada', matIdx, matDesc:mat.desc, matCod:mat.cod||'',
         un:mat.unUso||mat.un||'', qtd:it.qtdFisica,
@@ -26716,7 +27693,7 @@ function confirmarAlmRecebimento(completo) {
   if (!DB.contasPagar) DB.contasPagar=[];
   var tombstoneKeyPCRec2 = 'autocp-pc-' + pc.num;
   var cpExisting = DB.contasPagar.find(function(p){return p.nf===pc.num;});
-  if (!cpExisting && !(DB._tombstones && DB._tombstones[tombstoneKeyPCRec2])) {
+  if (moduloAtivo('fin') && !cpExisting && !(DB._tombstones && DB._tombstones[tombstoneKeyPCRec2])) {
     DB.contasPagar.push({
       id: tombstoneKeyPCRec2,
       desc:'PC '+pc.num+' — '+pc.forn, forn:pc.forn,
@@ -29456,11 +30433,11 @@ function saveBol() {
 function aprovarBoletimById(id){
   var bol=(DB.boletins||[]).find(function(b){return b.id===id;});
   if(!bol)return;
-  if(!confirm('Aprovar boletim '+bol.num+' e gerar Conta a Receber de '+fmt(bol.total)+'?'))return;
+  if(!confirm('Aprovar boletim '+bol.num+(moduloAtivo('fin')?' e gerar Conta a Receber de '+fmt(bol.total):'')+'?'))return;
   bol.status='aprovado';
   // Create CR
   if(!DB.contasReceber)DB.contasReceber=[];
-  DB.contasReceber.push({
+  if (moduloAtivo('fin')) DB.contasReceber.push({
     desc:'BM '+bol.num+' — '+(bol.contNum||'')+' — '+bol.cliNome,
     cli:bol.cliNome, emissao:bol.data, venc:bol.venc||bol.data,
     valor:bol.total, recebido:0, status:'Pendente',
@@ -29468,7 +30445,7 @@ function aprovarBoletimById(id){
     criadoEm:new Date().toLocaleString('pt-BR'),
   });
   saveAll(true); renderBoletins();
-  showToast('✅ Boletim aprovado! Conta a Receber de '+fmt(bol.total)+' criada.');
+  showToast(moduloAtivo('fin') ? '✅ Boletim aprovado! Conta a Receber de '+fmt(bol.total)+' criada.' : '✅ Boletim aprovado!');
 }
 
 function aprovarBoletim(){
@@ -29570,7 +30547,7 @@ function buildAllAlerts() {
 
   // Contas a pagar vencendo em 7 dias
   var limit7 = new Date(today); limit7.setDate(limit7.getDate()+7);
-  (DB.contasPagar||[]).filter(function(p){
+  (moduloAtivo('fin') ? (DB.contasPagar||[]) : []).filter(function(p){
     if (p.status==='Pago') return false;
     var d = new Date(p.venc+'T23:59:59');
     return d >= today && d <= limit7;
@@ -29580,7 +30557,7 @@ function buildAllAlerts() {
   });
 
   // Contas vencidas
-  (DB.contasPagar||[]).filter(function(p){
+  (moduloAtivo('fin') ? (DB.contasPagar||[]) : []).filter(function(p){
     return p.status!=='Pago' && p.venc && new Date(p.venc+'T23:59:59') < today;
   }).slice(0,5).forEach(function(p){
     alertas.push({icon:'🚨', titulo:'CP vencida: '+p.desc,
@@ -29588,7 +30565,7 @@ function buildAllAlerts() {
   });
 
   // Estoque abaixo do mínimo
-  (DB.materiais||[]).filter(function(m){
+  (moduloAtivo('alm') ? (DB.materiais||[]) : []).filter(function(m){
     return m.estMin && parseFloat(m.estoque||0) <= parseFloat(m.estMin||0);
   }).slice(0,5).forEach(function(m){
     alertas.push({icon:'📦', titulo:'Estoque baixo: '+(m.desc||'').substring(0,30),
@@ -30358,7 +31335,7 @@ function saveNF() {
   };
 
   // If NF de serviço emitida → generate CR automatically
-  if (tipo==='servico' && obj.status==='emitida' && obj.valor>0 && !editId) {
+  if (moduloAtivo('fin') && tipo==='servico' && obj.status==='emitida' && obj.valor>0 && !editId) {
     if (!DB.contasReceber) DB.contasReceber=[];
     var os = (DB.ordens||[]).find(function(o){return o.num===obj.osNum;});
     DB.contasReceber.push({
@@ -30450,8 +31427,28 @@ function getEncargosPatronal() {
 // ── TAB: EMPRESA ─────────────────────────────────────────────────────────────
 var _empLogoData = null;
 
+function renderModulosCard() {
+  var card = g('mod-card');
+  if (!card) return;
+  card.style.display = (currentUser && currentUser.perfil === 'admin') ? '' : 'none';
+  if (g('mod-fin')) g('mod-fin').checked = moduloAtivo('fin');
+  if (g('mod-alm')) g('mod-alm').checked = moduloAtivo('alm');
+}
+function salvarModulos() {
+  if (!currentUser || currentUser.perfil !== 'admin') { showToast('Só o administrador pode alterar os módulos.', 'warn'); return; }
+  if (!DB.config) DB.config = {};
+  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked };
+  DB.config._updatedAt = new Date().toISOString();
+  saveAll(true);
+  aplicarModulosNaNav();
+  if (typeof updateTopbarCadeiaBadges === 'function') updateTopbarCadeiaBadges();
+  if (typeof updateTopbarAlerts === 'function') updateTopbarAlerts();
+  showToast('✅ Módulos atualizados.');
+}
+
 function renderEmpresa() {
   var cfg = DB.config || {};
+  renderModulosCard();
   var setV = function(id, v) { var el = g(id); if(el) el.value = v||''; };
   setV('emp-nome',     cfg.empresa||'');
   setV('emp-fantasia', cfg.fantasia||'');

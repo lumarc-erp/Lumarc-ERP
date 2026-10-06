@@ -5069,8 +5069,9 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         </div>
         <div class="form-group full">
           <label>Família de serviço <span style="color:#DC2626">*</span></label>
-          <select id="sol-familia"></select>
-          <small style="font-size:10px;color:var(--muted)">Define o questionário de triagem. Obrigatória para novas solicitações.</small>
+          <select id="sol-familia" onchange="solFamiliaChange()"></select>
+          <input type="text" id="sol-familia-outro" placeholder="Descreva o tipo de serviço (ex.: usinagem de molde)" style="display:none;margin-top:6px">
+          <small style="font-size:10px;color:var(--muted)">Define o questionário de triagem. Obrigatória para novas solicitações. Se o serviço não estiver na lista, escolha "Outro / não listado": o revisor define a família depois.</small>
         </div>
         <div class="form-group">
           <label>Contato</label>
@@ -5133,7 +5134,8 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
       <button class="btn btn-ghost" onclick="fecharSolTriagem()">Fechar</button>
       <button class="btn btn-ghost" onclick="abrirPendTarde('sol', _solTri && _solTri.id)">⚠️ Pendência descoberta tarde</button>
       <button class="btn btn-ghost" onclick="solGerarMensagem()">💬 Gerar mensagem ao cliente</button>
-      <button class="btn btn-primary" onclick="solTriSalvar(false)">💾 Salvar respostas</button>
+      <button class="btn btn-ghost" onclick="solTriSalvar(false)">💾 Salvar respostas</button>
+      <button class="btn btn-green" onclick="solConcluirTriagem()">✅ Concluir triagem</button>
     </div>
   </div>
 </div>
@@ -17250,7 +17252,7 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // sessões de trabalho longas), mas ainda capaz de pegar desatualização de
 // verdade, que nos casos reais já vistos sempre foi de dias, nunca só
 // poucas horas.
-const APP_BUILD_VERSION = '2026-10-06T00:30:00Z';
+const APP_BUILD_VERSION = '2026-10-06T03:00:00Z';
 
 // Compara esta build com o commit mais recente publicado no GitHub. Só
 // acende o aviso se o remoto for pelo menos 3 horas mais novo. Falha
@@ -19638,6 +19640,7 @@ function limparDuplicatasFolha() {
   _bootSeguroAposCloud(backfillUpdatedAtPCeOS, 'backfillUpdatedAtPCeOS');
   _bootSeguroAposCloud(backfillTipoUsoMaquinas, 'backfillTipoUsoMaquinas');
   _bootSeguroAposCloud(solSeedModelos, 'solSeedModelos');
+  _bootSeguroAposCloud(solSeedGeral, 'solSeedGeral');
   _bootSeguroAposCloud(migrarFotosParaBinSeparado, 'migrarFotosParaBinSeparado');
   _bootSeguroAposCloud(migrarStatusOrcLegado, 'migrarStatusOrcLegado');
   _bootSeguro(_iniciarRascunhoAutoSave, '_iniciarRascunhoAutoSave');
@@ -21337,7 +21340,33 @@ function solEtapaInfo(k) { return SOL_ETAPAS.find(function(e) { return e.k === k
 // SOL antiga (sem etapa): pendente = Nova; já virou orçamento = Em preparação.
 function solEtapa(s) { return s.etapa || (s.status === 'convertido' ? 'preparacao' : 'nova'); }
 
-function solFamiliasAtivas() { return (DB.solFamilias || []).filter(function(f) { return f.ativa !== false; }).sort(_solOrd); }
+function solFamiliasAtivas() {
+  // A família "Geral" é só a base do "Outro / não listado": não aparece como escolha normal.
+  return (DB.solFamilias || []).filter(function(f) { return f.ativa !== false && f.id !== 'fam-geral'; }).sort(_solOrd);
+}
+function solPodeDefinirFamilia() { return temPerm('revisar') || temPerm('solcfg'); }
+
+// Cria a família-base "Geral" (poucas perguntas críticas) em instalações novas e já existentes.
+// Ids fixos: dois computadores criando ao mesmo tempo resultam no mesmo registro.
+function solSeedGeral() {
+  if (!DB.solFamilias) DB.solFamilias = [];
+  if (!DB.solPerguntas) DB.solPerguntas = [];
+  if (DB.solFamilias.some(function(f) { return f.id === 'fam-geral'; })) return;
+  var TS = '2026-10-06T00:00:00.000Z';
+  DB.solFamilias.push({ id: 'fam-geral', nome: 'Geral', ordem: 99, ativa: true, _updatedAt: TS });
+  var Q = [
+    ['Qual é o escopo do serviço?', 'texto', []],
+    ['Material especificado?', 'texto', []],
+    ['Quantidade', 'numero', []],
+    ['Há desenho, amostra ou foto?', 'lista', ['Desenho com tolerâncias','Desenho sem tolerâncias','Amostra','Desenho + amostra','Só foto','Nenhum']],
+    ['Prazo e se é parada de máquina', 'texto', []],
+  ];
+  Q.forEach(function(q, i) {
+    DB.solPerguntas.push({ id: 'p-geral-0' + (i + 1), texto: q[0], tipo: q[1], critica: true, opcoes: q[2], familias: ['fam-geral'], cond: null, ordem: i + 1, ativa: true, _updatedAt: TS });
+  });
+  saveAll(true);
+  if (typeof updateTopbarSolBadge === 'function') updateTopbarSolBadge();
+}
 function solFamiliaNome(id) {
   var f = (DB.solFamilias || []).find(function(x) { return x.id === id; });
   return f ? f.nome : 'Não classificada';
@@ -21393,6 +21422,8 @@ function solPodeMudarEtapa(s, destino) {
     return 'Só quem tem permissão de revisão (Fabian/Marcos) pode marcar "' + solEtapaInfo(destino).l + '".';
   if (SOL_ETAPAS_DECISAO.indexOf(atual) >= 0 && !temPerm('revisar'))
     return 'Esta SOL está em "' + solEtapaInfo(atual).l + '" — só quem tem permissão de revisão pode alterar.';
+  if ((destino === 'pronta' || destino === 'revisada') && s.familiaPendente)
+    return 'A família deste serviço está "a definir". Só depois que o revisor definir a família (ou criar uma nova) é possível marcar "' + solEtapaInfo(destino).l + '".';
   if (destino === 'pronta' && s.familiaId) {
     var cp = solCriticasPendentes(s);
     if (cp.length) return 'Há ' + cp.length + ' pergunta(s) crítica(s) pendente(s). Resolva (Confirmado, Hipótese ou N.A.) antes de marcar "Pronta para orçar".';
@@ -21532,12 +21563,19 @@ function solCardMeta(s) {
   var et = solEtapaInfo(solEtapa(s));
   var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">';
   h += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + et.c + '22;color:' + et.c + ';font-weight:700">' + et.l + '</span>';
-  if (s.familiaId) {
+  if (s.familiaPendente) {
+    h += '<span style="font-size:10px;color:#9A3412;font-weight:700" title="Aguardando o revisor definir a família">🏷️ A definir' + (s.familiaOutroTxt ? ': ' + _solEsc(s.familiaOutroTxt) : '') + '</span>';
+  } else if (s.familiaId) {
     h += '<span style="font-size:10px;color:#92400E">🏷️ ' + _solEsc(solFamiliaNome(s.familiaId)) + '</span>';
-    var n = solCriticasPendentes(s).length;
-    if (n && solEtapa(s) !== 'aguardando_cliente') h += '<span style="font-size:10px;color:#B91C1C;font-weight:700">★ ' + n + ' crítica(s) pendente(s)</span>';
   } else {
     h += '<span style="font-size:10px;color:#92400E">🏷️ Não classificada</span>';
+  }
+  if (s.familiaId) {
+    var n = solCriticasPendentes(s).length;
+    if (n && solEtapa(s) !== 'aguardando_cliente') h += '<span style="font-size:10px;color:#B91C1C;font-weight:700">★ ' + n + ' crítica(s) pendente(s)</span>';
+  }
+  if (s.triagemConcluidaEm && solEtapa(s) === 'pronta') {
+    h += '<span style="font-size:10px;color:#059669;font-weight:700">✅ triagem concluída em ' + new Date(s.triagemConcluidaEm).toLocaleDateString('pt-BR') + (s.triagemConcluidaPor ? ' por ' + _solEsc(s.triagemConcluidaPor) : '') + '</span>';
   }
   if (s.responsavel) h += '<span style="font-size:10px;color:#92400E">👤 ' + _solEsc(s.responsavel) + '</span>';
   if (solEtapa(s) === 'aguardando_cliente' && s.msgClienteEm) {
@@ -21554,16 +21592,42 @@ function solMiniEtapa(s) {
 function solPreencherSelectFamilia(sol) {
   var sel = g('sol-familia');
   if (!sel) return;
-  var atual = sol ? (sol.familiaId || '') : '';
+  var pend = !!(sol && sol.familiaPendente);
+  var atual = (sol && !pend) ? (sol.familiaId || '') : '';
   var opts = [];
-  opts.push(sol && !atual ? '<option value="">— Não classificada —</option>' : '<option value="">— Escolha a família —</option>');
+  opts.push(sol && !sol.familiaId ? '<option value="">— Não classificada —</option>' : '<option value="">— Escolha a família —</option>');
   var fams = solFamiliasAtivas();
-  if (atual && !fams.some(function(f) { return f.id === atual; })) {
+  if (atual && atual !== 'fam-geral' && !fams.some(function(f) { return f.id === atual; })) {
     var fx = (DB.solFamilias || []).find(function(f) { return f.id === atual; });
     if (fx) fams.push(fx);
   }
   fams.forEach(function(f) { opts.push('<option value="' + _solEsc(f.id) + '"' + (f.id === atual ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'); });
+  opts.push('<option value="__outro__"' + (pend ? ' selected' : '') + '>➕ Outro / não listado</option>');
   sel.innerHTML = opts.join('');
+  // SOL com família "a definir": só quem revisa troca por uma família da lista.
+  sel.disabled = !!(pend && !solPodeDefinirFamilia());
+  var inp = g('sol-familia-outro');
+  if (inp) inp.value = pend ? (sol.familiaOutroTxt || '') : '';
+  solFamiliaChange();
+}
+function solFamiliaChange() {
+  var sel = g('sol-familia'), inp = g('sol-familia-outro');
+  if (inp && sel) inp.style.display = (sel.value === '__outro__') ? '' : 'none';
+}
+// Aplica a escolha de família feita no modal a uma SOL existente. Devolve texto de erro ou ''.
+function solAplicarFamiliaModal(sol, famSel, outroTxt) {
+  if (famSel === '__outro__') {
+    if (!sol.familiaPendente || (sol.familiaOutroTxt || '') !== outroTxt) solLog(sol, 'Família: "Outro / não listado" — ' + outroTxt);
+    sol.familiaId = 'fam-geral'; sol.familiaPendente = true; sol.familiaOutroTxt = outroTxt;
+    return '';
+  }
+  if (!famSel) return '';
+  if (sol.familiaPendente && !solPodeDefinirFamilia()) return 'A família desta SOL está "a definir" e só quem revisa pode defini-la.';
+  if (famSel !== (sol.familiaId || '') || sol.familiaPendente) {
+    solLog(sol, sol.familiaPendente ? 'Família definida: ' + solFamiliaNome(famSel) + ' (estava "a definir")' : 'Família: ' + solFamiliaNome(sol.familiaId) + ' → ' + solFamiliaNome(famSel));
+    sol.familiaId = famSel; sol.familiaPendente = false;
+  }
+  return '';
 }
 
 // ============================================================
@@ -21575,7 +21639,7 @@ function abrirSolTriagem(id) {
   if (_solTri && _solTri.dirty) solTriSalvar(true);
   var s = (DB.solicitacoesOrc || []).find(function(x) { return x.id === id; });
   if (!s) return;
-  _solTri = { id: id, resp: JSON.parse(JSON.stringify(s.respostas || {})), famId: s.familiaId || '', responsavel: s.responsavel || '', excecao: !!s.excecaoUrgencia, dirty: false, condRefs: {} };
+  _solTri = { id: id, resp: JSON.parse(JSON.stringify(s.respostas || {})), famId: s.familiaId || '', pendente: !!s.familiaPendente, outroTxt: s.familiaOutroTxt || '', responsavel: s.responsavel || '', excecao: !!s.excecaoUrgencia, dirty: false, condRefs: {} };
   g('sol-tri-title').textContent = '📋 Triagem — ' + (s.num || 'SOL') + ' · ' + (s.cliente || '');
   g('sol-tri-sub').textContent = 'Origem: ' + (s.origem || '—') + ' · recebida em ' + (s.dataRecebido ? new Date(s.dataRecebido).toLocaleDateString('pt-BR') : '—');
   solTriRenderTudo();
@@ -21587,22 +21651,27 @@ function solTriRenderTudo() {
 function solTriRenderCtrl() {
   var s = solTriSol(); var box = g('sol-tri-ctrl');
   if (!s || !box) return;
+  var pode = solPodeDefinirFamilia();
   var fams = solFamiliasAtivas();
-  if (_solTri.famId && !fams.some(function(f) { return f.id === _solTri.famId; })) {
+  if (_solTri.famId && !_solTri.pendente && _solTri.famId !== 'fam-geral' && !fams.some(function(f) { return f.id === _solTri.famId; })) {
     var fx = (DB.solFamilias || []).find(function(f) { return f.id === _solTri.famId; });
     if (fx) fams.push(fx);
   }
-  var famOpts = '<option value="">— Não classificada —</option>' + fams.map(function(f) { return '<option value="' + _solEsc(f.id) + '"' + (f.id === _solTri.famId ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'; }).join('');
+  var valSel = _solTri.pendente ? '__outro__' : (_solTri.famId || '');
+  var travado = _solTri.pendente && !pode;
+  var famOpts = '<option value="">— Não classificada —</option>'
+    + fams.map(function(f) { return '<option value="' + _solEsc(f.id) + '"' + (f.id === valSel ? ' selected' : '') + '>' + _solEsc(f.nome) + '</option>'; }).join('')
+    + '<option value="__outro__"' + (valSel === '__outro__' ? ' selected' : '') + '>➕ Outro / não listado</option>';
   var et = solEtapa(s), ei = solEtapaInfo(et);
   var etOpts = SOL_ETAPAS.map(function(e) { return '<option value="' + e.k + '"' + (e.k === et ? ' selected' : '') + '>' + e.l + '</option>'; }).join('');
   var nomes = (typeof loadStoredUsers === 'function' ? loadStoredUsers() : (DB.usuarios || [])).filter(function(u) { return u.status !== 'inativo'; }).map(function(u) { return u.nome; });
   if (_solTri.responsavel && nomes.indexOf(_solTri.responsavel) < 0) nomes.push(_solTri.responsavel);
   var respOpts = '<option value="">— ninguém —</option>' + nomes.map(function(n) { return '<option' + (n === _solTri.responsavel ? ' selected' : '') + ' value="' + _solEsc(n) + '">' + _solEsc(n) + '</option>'; }).join('');
   var nivelTxt = '';
-  if (currentUser && currentUser.perfil === 'assistente' && _solTri.famId) nivelTxt = '<span style="font-size:11px;color:var(--muted)">🎓 Seu nível nesta família: <b>' + solNivelDe(currentUser.login, _solTri.famId) + '</b></span>';
-  box.innerHTML =
+  if (currentUser && currentUser.perfil === 'assistente' && _solTri.famId && !_solTri.pendente) nivelTxt = '<span style="font-size:11px;color:var(--muted)">🎓 Seu nível nesta família: <b>' + solNivelDe(currentUser.login, _solTri.famId) + '</b></span>';
+  var html =
     '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;align-items:end">'
-    + '<div class="form-group" style="margin:0"><label>Família de serviço</label><select onchange="solTriMudarFamilia(this.value)">' + famOpts + '</select></div>'
+    + '<div class="form-group" style="margin:0"><label>Família de serviço</label><select' + (travado ? ' disabled' : '') + ' onchange="solTriMudarFamilia(this.value)">' + famOpts + '</select></div>'
     + '<div class="form-group" style="margin:0"><label>Responsável pelo preparo</label><select onchange="solTriMudarResp(this.value)">' + respOpts + '</select></div>'
     + '<div class="form-group" style="margin:0"><label>Etapa atual: <span style="color:' + ei.c + ';font-weight:800">' + ei.l + '</span></label>'
     + '<div style="display:flex;gap:6px"><select id="sol-tri-etapa-sel" style="flex:1">' + etOpts + '</select><button class="btn btn-primary btn-sm" onclick="solTriAplicarEtapa()">Aplicar</button></div></div>'
@@ -21610,6 +21679,18 @@ function solTriRenderCtrl() {
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px">'
     + '<label style="font-size:11px;display:flex;gap:6px;align-items:center"><input type="checkbox"' + (_solTri.excecao ? ' checked' : '') + ' onchange="solTriMudarExcecao(this.checked)"> Preparada diretamente pelo Fabian por urgência (exceção)</label>'
     + nivelTxt + '</div>';
+  if (_solTri.pendente) {
+    html += '<div style="margin-top:10px;padding:10px;border-radius:8px;background:#FFF7ED;border:1px solid #FDBA74">'
+      + '<div style="font-size:11px;font-weight:800;color:#9A3412">🏷️ FAMÍLIA A DEFINIR</div>'
+      + '<div style="font-size:11px;color:#9A3412;margin:4px 0 6px">Este serviço não se encaixa nas famílias da lista. Enquanto isso valem as perguntas da família Geral. A triagem só pode ser concluída depois que o revisor definir a família.</div>'
+      + '<div style="display:flex;gap:8px;align-items:center"><input type="text" style="flex:1" value="' + _solEsc(_solTri.outroTxt) + '" placeholder="Tipo de serviço (ex.: usinagem de molde)" onchange="solTriMudarOutroTxt(this.value)">'
+      + (pode ? '<button class="btn btn-primary btn-sm" onclick="solTriCriarFamilia()">➕ Criar família a partir desta SOL</button>' : '') + '</div>'
+      + '<div style="font-size:10px;color:#9A3412;margin-top:4px">' + (pode ? 'Ou escolha uma família existente na lista acima.' : 'Aguardando o revisor (Fabian/Marcos) definir a família.') + '</div></div>';
+  }
+  if (['preparacao', 'revisao', 'revisada', 'proposta'].indexOf(et) >= 0) {
+    html += '<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:#FEF9C3;border:1px solid #FDE68A;font-size:11px;color:#854D0E">Esta SOL já está em <b>' + ei.l + '</b>. Mudanças nas respostas não alteram o orçamento já iniciado — revise-o manualmente.</div>';
+  }
+  box.innerHTML = html;
 }
 function solTriRenderResumo() {
   var s = solTriSol(); var box = g('sol-tri-resumo');
@@ -21690,7 +21771,46 @@ function solTriSet(pid, campo, valor) {
   clearTimeout(_solTriTimer);
   _solTriTimer = setTimeout(function() { if (_solTri && _solTri.dirty) solTriSalvar(true); }, 700);
 }
-function solTriMudarFamilia(id) { _solTri.famId = id; _solTri.dirty = true; solTriRenderPerguntas(); solTriRenderCtrl(); solTriSalvar(true); }
+function solTriMudarFamilia(val) {
+  if (val === '__outro__') {
+    solSeedGeral();
+    _solTri.famId = 'fam-geral'; _solTri.pendente = true;
+  } else {
+    if (_solTri.pendente && !solPodeDefinirFamilia()) { solTriRenderCtrl(); return; }
+    _solTri.famId = val; _solTri.pendente = false;
+  }
+  _solTri.dirty = true;
+  solTriRenderPerguntas(); solTriRenderCtrl(); solTriSalvar(true);
+}
+function solTriMudarOutroTxt(v) { _solTri.outroTxt = String(v || '').trim(); _solTri.dirty = true; solTriSalvar(true); }
+
+// Cria uma família nova a partir de uma SOL "Outro": nasce com as perguntas-base da família Geral
+// (mesmas perguntas, mesmos ids — as respostas já dadas são aproveitadas) e vincula a SOL.
+function solTriCriarFamilia() {
+  if (!solPodeDefinirFamilia()) { showToast('Só quem revisa pode criar famílias.', 'warn'); return; }
+  var s = solTriSalvar(true);
+  if (!s) return;
+  var sug = (s.familiaOutroTxt || '').trim();
+  sug = sug ? sug.charAt(0).toUpperCase() + sug.slice(1, 60) : '';
+  var nome = prompt('Nome da nova família de serviço:', sug);
+  if (nome === null) return;
+  nome = String(nome).trim();
+  if (!nome) return;
+  var ja = (DB.solFamilias || []).find(function(f) { return String(f.nome).toLowerCase() === nome.toLowerCase(); });
+  if (ja) { alert('Já existe a família "' + ja.nome + '". Escolha-a na lista de famílias, no alto da tela.'); return; }
+  var ordem = (DB.solFamilias || []).filter(function(f) { return f.id !== 'fam-geral'; }).reduce(function(m, f) { return Math.max(m, f.ordem || 0); }, 0) + 1;
+  var fam = { id: 'fam-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), nome: nome, ordem: ordem, ativa: true, _updatedAt: _solAgora() };
+  DB.solFamilias.push(fam);
+  var n = 0;
+  (DB.solPerguntas || []).forEach(function(p) {
+    if (p.ativa !== false && (p.familias || []).indexOf('fam-geral') >= 0 && p.familias.indexOf(fam.id) < 0) { p.familias.push(fam.id); p._updatedAt = _solAgora(); n++; }
+  });
+  solLog(s, 'Família criada a partir da SOL: "' + nome + '" (começa com as ' + n + ' perguntas-base da família Geral)');
+  s.familiaId = fam.id; s.familiaPendente = false; s.familiaDefinidaPor = _solUser(); s._updatedAt = _solAgora();
+  _solTri.famId = fam.id; _solTri.pendente = false;
+  saveAll(true); renderSolicitacoesTab(); updateTopbarSolBadge(); solTriRenderTudo();
+  showToast('✅ Família "' + nome + '" criada e vinculada. Ajuste as perguntas em ⚙️ Modelos.');
+}
 function solTriMudarResp(nome) { _solTri.responsavel = nome; _solTri.dirty = true; solTriSalvar(true); }
 function solTriMudarExcecao(v) { _solTri.excecao = !!v; _solTri.dirty = true; solTriSalvar(true); }
 
@@ -21731,29 +21851,95 @@ function solTriSalvar(silent) {
     if (!String(r.v || '').trim() && (!r.s || r.s === 'P')) return;
     limpo[pid] = { v: r.v || '', s: r.s || 'P', d: r.d || '', u: r.u || '' };
   });
-  var mudouFam = (s.familiaId || '') !== (_solTri.famId || '');
-  var mudouResp = JSON.stringify(s.respostas || {}) !== JSON.stringify(limpo);
-  var mudouOutros = (s.responsavel || '') !== (_solTri.responsavel || '') || !!s.excecaoUrgencia !== !!_solTri.excecao;
-  if (mudouFam) solLog(s, 'Família: ' + solFamiliaNome(s.familiaId) + ' → ' + solFamiliaNome(_solTri.famId));
+  var famAnt = s.familiaId || '', pendAnt = !!s.familiaPendente, txtAnt = s.familiaOutroTxt || '';
+  var famNov = _solTri.famId || '', pendNov = !!_solTri.pendente, txtNov = String(_solTri.outroTxt || '').trim();
+  var mudouFam = famAnt !== famNov || pendAnt !== pendNov;
+  var mudouTxt = pendNov && !mudouFam && txtAnt !== txtNov;
+  var respAnt = s.respostas || {};
+  var mudouResp = JSON.stringify(respAnt) !== JSON.stringify(limpo);
+  // Só a mudança do CONTEÚDO de uma resposta reabre a triagem concluída (trocar Hipótese por Confirmado não).
+  var valorMudou = Object.keys(limpo).concat(Object.keys(respAnt)).some(function(pid) { return String((respAnt[pid] || {}).v || '') !== String((limpo[pid] || {}).v || ''); });
+  var mudouResponsavel = (s.responsavel || '') !== (_solTri.responsavel || '');
+  var mudouExcecao = !!s.excecaoUrgencia !== !!_solTri.excecao;
+  if (mudouFam) {
+    if (pendNov) solLog(s, 'Família: "Outro / não listado"' + (txtNov ? ' — ' + txtNov : ''));
+    else if (pendAnt) solLog(s, 'Família definida: ' + solFamiliaNome(famNov) + ' (estava "a definir")');
+    else solLog(s, 'Família: ' + solFamiliaNome(famAnt) + ' → ' + solFamiliaNome(famNov));
+  } else if (mudouTxt) {
+    solLog(s, 'Tipo de serviço (Outro): ' + txtNov);
+  }
   if (mudouResp) {
     var ult = (s.historico || [])[(s.historico || []).length - 1];
     var repete = ult && ult.t === 'Respostas atualizadas' && ult.por === _solUser() && (Date.now() - new Date(ult.em)) < 600000;
     if (!repete) solLog(s, 'Respostas atualizadas');
   }
-  if (mudouOutros && (s.responsavel || '') !== (_solTri.responsavel || '')) solLog(s, 'Responsável: ' + (_solTri.responsavel || 'ninguém'));
-  if (mudouOutros && !!s.excecaoUrgencia !== !!_solTri.excecao) solLog(s, _solTri.excecao ? 'Marcada como exceção de urgência (preparada pelo Fabian)' : 'Exceção de urgência desmarcada');
-  s.familiaId = _solTri.famId || '';
+  if (mudouResponsavel) solLog(s, 'Responsável: ' + (_solTri.responsavel || 'ninguém'));
+  if (mudouExcecao) solLog(s, _solTri.excecao ? 'Marcada como exceção de urgência (preparada pelo Fabian)' : 'Exceção de urgência desmarcada');
+  if (pendAnt && !pendNov) s.familiaDefinidaPor = _solUser();
+  s.familiaId = famNov;
+  s.familiaPendente = pendNov;
+  s.familiaOutroTxt = pendNov ? txtNov : txtAnt;   // o texto fica guardado mesmo depois de definida a família (base da Fase 4)
   s.respostas = limpo;
   s.responsavel = _solTri.responsavel || '';
   s.excecaoUrgencia = !!_solTri.excecao;
-  if (mudouFam || mudouResp || mudouOutros) s._updatedAt = agora;
-  if (mudouResp && solEtapa(s) === 'nova' && Object.keys(limpo).length) solAplicarEtapa(s, 'triagem', 'primeira resposta');
+  if (mudouFam || mudouTxt || mudouResp || mudouResponsavel || mudouExcecao) s._updatedAt = agora;
+  var et = solEtapa(s);
+  if (et === 'pronta' && (mudouFam || valorMudou || solCriticasPendentes(s).length > 0)) {
+    s.triagemConcluidaEm = ''; s.triagemConcluidaPor = '';
+    solAplicarEtapa(s, 'triagem', 'informação alterada após a conclusão');
+  } else if (mudouResp && et === 'nova' && Object.keys(limpo).length) {
+    solAplicarEtapa(s, 'triagem', 'primeira resposta');
+  }
   _solTri.dirty = false;
   saveAll(true);
   renderSolicitacoesTab();
   updateTopbarSolBadge();
   if (!silent) showToast('✅ Respostas salvas.');
   return s;
+}
+
+// ---------- CONCLUIR TRIAGEM ----------
+// O fim da triagem passa a ser um ato explícito: confere as críticas, mostra o que vira premissa,
+// registra quem concluiu e libera a SOL ("Pronta para orçar") para virar orçamento.
+function solConcluirTriagem() {
+  var s = solTriSalvar(true);
+  if (!s) return;
+  var et = solEtapa(s);
+  if (!s.familiaId) { alert('Escolha a família de serviço antes de concluir a triagem.'); return; }
+  if (s.familiaPendente) {
+    alert('A família deste serviço está "a definir".\n\n' + (solPodeDefinirFamilia()
+      ? 'Escolha uma família existente na lista ou use "Criar família a partir desta SOL" para poder concluir.'
+      : 'Peça ao revisor (Fabian/Marcos) para definir a família. Depois disso a triagem pode ser concluída.'));
+    return;
+  }
+  if (['preparacao', 'revisao', 'revisada', 'proposta', 'ganha', 'perdida'].indexOf(et) >= 0) {
+    showToast('Esta SOL já passou da triagem (etapa: ' + solEtapaInfo(et).l + ').', 'info');
+    return;
+  }
+  var crit = solCriticasPendentes(s);
+  if (crit.length) {
+    alert('Ainda há ' + crit.length + ' pergunta(s) crítica(s) pendente(s):\n\n' + crit.slice(0, 6).map(function(p) { return '• ' + p.texto; }).join('\n') + (crit.length > 6 ? '\n• ...' : '') + '\n\nResolva cada uma (Confirmado, Hipótese ou N.A.) para concluir.');
+    var el = g('triq-' + crit[0].id);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.outline = '2px solid #DC2626'; setTimeout(function() { el.style.outline = ''; }, 2500); }
+    return;
+  }
+  if (et !== 'pronta') {
+    var hip = solHipoteses(s), semResp = solPendentes(s);
+    var msg = 'Concluir a triagem de ' + (s.num || 'esta SOL') + '?\n';
+    if (hip.length) msg += '\n• ' + hip.length + ' hipótese(s) viram premissas do orçamento:\n' + hip.slice(0, 6).map(function(p) { return '   - ' + p.texto + ': ' + s.respostas[p.id].v; }).join('\n') + (hip.length > 6 ? '\n   - ...' : '');
+    if (semResp.length) msg += '\n\n• ' + semResp.length + ' pergunta(s) não crítica(s) ficaram sem resposta.';
+    msg += '\n\nA SOL ficará "Pronta para orçar".';
+    if (!confirm(msg)) return;
+    s.triagemConcluidaEm = _solAgora();
+    s.triagemConcluidaPor = _solUser();
+    solAplicarEtapa(s, 'pronta', 'triagem concluída');
+    solLog(s, 'Triagem concluída por ' + _solUser() + ' (' + hip.length + ' hipótese(s), ' + semResp.length + ' sem resposta)');
+    s._updatedAt = _solAgora();
+    saveAll(true); renderSolicitacoesTab(); updateTopbarSolBadge();
+  }
+  closeModal('modal-sol-triagem');
+  if (confirm('Triagem concluída — a SOL está pronta para orçar.\n\nConstruir o orçamento agora?\n\nOK = construir agora · Cancelar = deixar a SOL pronta no quadro')) construirOrcamentoDeSolicitacao(s.id, true);
+  else showToast('✅ Triagem concluída. A SOL está pronta para orçar.');
 }
 function solTriAplicarEtapa() {
   var s = solTriSalvar(true);
@@ -21892,11 +22078,12 @@ function solMdHtmlFam() {
   }).join('');
   return '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--muted);font-size:10px"><th>FAMÍLIA</th><th style="text-align:center">PERGUNTAS ATIVAS</th><th style="text-align:center">ORDEM</th><th style="text-align:center">ATIVA</th></tr></thead><tbody>' + rows + '</tbody></table>'
     + '<div style="display:flex;gap:8px;margin-top:12px"><input type="text" id="sm-fam-novo" placeholder="Nova família..." style="flex:1"><button class="btn btn-primary btn-sm" onclick="solMdFamAdd()">+ Adicionar</button></div>'
-    + '<div style="font-size:10px;color:var(--muted);margin-top:8px">Famílias e perguntas nunca são apagadas — desative para tirar de uso (evita problemas de sincronização entre computadores).</div>';
+    + '<div style="font-size:10px;color:var(--muted);margin-top:8px">Famílias e perguntas nunca são apagadas — desative para tirar de uso (evita problemas de sincronização entre computadores). A família <b>Geral</b> é a base do "Outro / não listado": edite as perguntas dela, mas ela não pode ser desativada.</div>';
 }
 function solMdFamSet(id, campo, val) {
   var f = (DB.solFamilias || []).find(function(x) { return x.id === id; });
   if (!f) return;
+  if (id === 'fam-geral' && campo === 'ativa' && !val) { showToast('A família Geral é a base do "Outro / não listado" e não pode ser desativada.', 'warn'); solMdRender(); return; }
   if (campo === 'nome') { val = String(val).trim(); if (!val) { solMdRender(); return; } f.nome = val; }
   else if (campo === 'ordem') f.ordem = parseInt(val) || 0;
   else if (campo === 'ativa') f.ativa = !!val;
@@ -22136,11 +22323,17 @@ function salvarSolicitacao() {
   var _solAtual = id ? DB.solicitacoesOrc.find(function(x){return x.id===id;}) : null;
   // Nova SOL (ou SOL que já tinha família) exige família; SOL antiga sem família continua abrindo normalmente.
   if (!famSel && !(id && _solAtual && !_solAtual.familiaId)) { alert('Escolha a família de serviço.'); return; }
+  var _outro = (famSel === '__outro__');
+  var _outroTxt = g('sol-familia-outro') ? g('sol-familia-outro').value.trim() : '';
+  if (_outro && !_outroTxt) { alert('Descreva o tipo de serviço no campo "Outro".'); return; }
+  if (_outro) solSeedGeral();
+  var _famReal = _outro ? 'fam-geral' : famSel;
   var _novoId = 'solreq-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
   if (id) {
     var sol = DB.solicitacoesOrc.find(function(s){return s.id===id;});
     if (sol) {
-      if (famSel && famSel !== (sol.familiaId||'')) { solLog(sol, 'Família: ' + solFamiliaNome(sol.familiaId) + ' → ' + solFamiliaNome(famSel)); sol.familiaId = famSel; }
+      var _errFam = solAplicarFamiliaModal(sol, famSel, _outroTxt);
+      if (_errFam) { alert(_errFam); return; }
       sol.cliente = cliente;
       sol.contato = g('sol-contato').value.trim();
       sol.origem  = g('sol-origem').value;
@@ -22152,7 +22345,9 @@ function salvarSolicitacao() {
   } else {
     DB.solicitacoesOrc.push({
       id: _novoId,
-      familiaId: famSel,
+      familiaId: _famReal,
+      familiaPendente: _outro,
+      familiaOutroTxt: _outro ? _outroTxt : '',
       etapa: 'nova',
       respostas: {},
       responsavel: currentUser ? currentUser.nome : '',
@@ -22190,7 +22385,7 @@ function excluirSolicitacao(id) {
 // Inicia um orçamento novo a partir da solicitação — tira ela da fila na
 // hora (por escolha explícita: a construção do orçamento é o próprio
 // "cumprimento" do lembrete, não precisa esperar o orçamento ser salvo).
-function construirOrcamentoDeSolicitacao(id) {
+function construirOrcamentoDeSolicitacao(id, jaConfirmado) {
   var sol = (DB.solicitacoesOrc||[]).find(function(s){return s.id===id;});
   if (!sol) return;
   if (sol.familiaId) {
@@ -22203,7 +22398,7 @@ function construirOrcamentoDeSolicitacao(id) {
       if (!confirm('Esta SOL ainda não está "Pronta para orçar" (etapa atual: ' + solEtapaInfo(_et).l + ').\n\nConstruir o orçamento mesmo assim?')) return;
     }
   }
-  if (!confirm('Iniciar um novo orçamento para "' + sol.cliente + '"?\n\nEla sairá da fila de pendentes agora.')) return;
+  if (!jaConfirmado && !confirm('Iniciar um novo orçamento para "' + sol.cliente + '"?\n\nEla sairá da fila de pendentes agora.')) return;
   if (['nova','triagem','aguardando_cliente','pronta'].indexOf(solEtapa(sol)) >= 0) solAplicarEtapa(sol, 'preparacao', 'orçamento iniciado');
   solLog(sol, 'Orçamento iniciado a partir da SOL');
   sol.status = 'convertido';
@@ -22336,6 +22531,7 @@ var _pendenciasInfo = {
   sol:      { label: 'Solicitação(ões) de orçamento pendente(s)', icone:'🗒️', count:0, cor:'#FDE68A' },
   solcrit:  { label: 'SOL(s) com pergunta crítica pendente',   icone:'❗', count:0, cor:'#FCA5A5' },
   solcli:   { label: 'SOL(s) aguardando cliente há +2 dias',   icone:'⏳', count:0, cor:'#FDBA74' },
+  solfam:   { label: 'SOL(s) com família a definir',           icone:'🏷️', count:0, cor:'#FED7AA' },
   rcpc:     { label: 'RC(s) aguardando Pedido de Compra',      icone:'🛒', count:0, cor:'#FDBA74' },
   pcreceb:  { label: 'Pedido(s) de Compra aguardando recebimento', icone:'📦', count:0, cor:'#93C5FD' },
   osaguard: { label: 'OS aguardando ação (Engenharia/Compra/Material)', icone:'🔧', count:0, cor:'#C4B5FD' },
@@ -22368,7 +22564,7 @@ function pendenciaItemClick(key) {
   toggleTopbarPendencias();
   if (key === 'orc') { irParaOrcamentosFiltrado('aguardando'); return; }
   if (key === 'envio') { irParaOrcamentosFiltrado('liberado'); return; }
-  if (key === 'sol' || key === 'solcrit' || key === 'solcli') { goToTab('tab-solicitacoes'); return; }
+  if (key === 'sol' || key === 'solcrit' || key === 'solcli' || key === 'solfam') { goToTab('tab-solicitacoes'); return; }
   if (key === 'rc' || key === 'rcpc') { goToTab('tab-rc'); return; }
   if (key === 'pcreceb') { goToTab('tab-compras'); return; }
   if (key === 'osaguard' || key === 'osfat') { goToTab('tab-os'); return; }
@@ -22418,6 +22614,7 @@ function updateTopbarSolBadge() {
   _pendenciasInfo.solcli.count = pendentes.filter(function(s) {
     return solEtapa(s) === 'aguardando_cliente' && s.msgClienteEm && (agora - new Date(s.msgClienteEm)) > 2 * 86400000;
   }).length;
+  _pendenciasInfo.solfam.count = (DB.solicitacoesOrc || []).filter(function(s) { return s.familiaPendente && s.status !== 'encerrada'; }).length;
   renderTopbarPendencias();
 }
 

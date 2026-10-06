@@ -17239,38 +17239,25 @@ const JSONBIN_API_KEY = '$2a$10$ppAAInu8Ex1sy04Ji1FKX.FARP8uXRFe2cxRc5pZpbMe2a5t
 const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 
 // ── DETECÇÃO DE VERSÃO DESATUALIZADA ────────────────────────────────────────
-// Data/hora aproximada deste envio — comparada com o commit mais recente
-// do GitHub pra avisar, automaticamente e sem precisar rodar nada no
-// console, quando o computador está rodando uma cópia desatualizada.
+// Identificador DESTA cópia do sistema. A cada publicação o MESMO valor é gravado no
+// arquivo versao.txt do repositório. O sistema compara os dois: se o valor publicado for
+// mais novo que o desta cópia, esta cópia está desatualizada e o aviso vermelho acende.
 //
-// Já tentamos comparar por SHA exato do commit, mas isso tem uma armadilha
-// circular: o arquivo não pode conter o hash de si mesmo depois de salvo
-// (qualquer alteração, incluindo gravar esse hash, gera um commit novo com
-// OUTRO hash). Voltamos pra comparação por data, mas com margem BEM mais
-// generosa (3 horas, antes era só 30 minutos) — suficiente pra cobrir
-// qualquer atraso no processo de testar antes de publicar (mesmo em
-// sessões de trabalho longas), mas ainda capaz de pegar desatualização de
-// verdade, que nos casos reais já vistos sempre foi de dias, nunca só
-// poucas horas.
-const APP_BUILD_VERSION = '2026-10-06T03:00:00Z';
+// Antes a comparação era entre a data do commit no GitHub e um horário gravado aqui, com
+// margem de 3 horas — e dava falso alarme sempre que a publicação saía mais de 3 horas
+// depois do horário gravado. Comparar dois identificadores publicados juntos não depende
+// de relógio nem de margem. Falhas de rede/API nunca acendem o aviso.
+const APP_BUILD_VERSION = '2026-10-06T09:35:00Z';
 
-// Compara esta build com o commit mais recente publicado no GitHub. Só
-// acende o aviso se o remoto for pelo menos 3 horas mais novo. Falha
-// silenciosamente em caso de erro de rede/API — nunca mostra aviso
-// "desatualizado" só porque a própria checagem falhou.
 async function verificarVersaoAtualizada() {
   try {
-    const resp = await fetch('https://api.github.com/repos/lumarc-erp/Lumarc-ERP/commits/main');
+    const resp = await fetch('https://raw.githubusercontent.com/lumarc-erp/Lumarc-ERP/main/versao.txt?t=' + Date.now(), { cache: 'no-store' });
     if (!resp.ok) return;
-    const data = await resp.json();
-    const dataCommitRemoto = data.commit && data.commit.committer && data.commit.committer.date;
-    if (!dataCommitRemoto) return;
-    const remotoTime = new Date(dataCommitRemoto).getTime();
-    const localTime = new Date(APP_BUILD_VERSION).getTime();
+    const remoto = (await resp.text()).trim();
+    // Ignora qualquer resposta que não seja um identificador de versão (ex.: página de erro).
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(remoto)) return;
     const banner = g('topbar-versao-antiga');
-    if (banner) {
-      banner.style.display = (remotoTime - localTime > 3 * 60 * 60 * 1000) ? 'flex' : 'none';
-    }
+    if (banner) banner.style.display = (new Date(remoto).getTime() > new Date(APP_BUILD_VERSION).getTime()) ? 'flex' : 'none';
   } catch (e) {
     console.warn('[Versão] Falha ao verificar versão mais recente (não gera aviso):', e.message);
   }
@@ -19322,7 +19309,12 @@ function applyPermissions(user) {
 function updateTopbarUser(user) {
   const labels = { admin:'Admin', gerente:'Gerente', comercial:'Comercial', operacional:'Operacional', financeiro:'Financeiro', assistente:'Assistente', custom:'Custom' };
   const el = g('topbar-user-info');
-  if (el) el.innerHTML = '<span style="font-size:11px;color:#94A3B8">' + user.nome + '</span> <span class="role-badge role-' + user.perfil + '" style="font-size:9px">' + (labels[user.perfil]||user.perfil) + '</span>';
+  var _ver = '';
+  try {
+    var _dv = new Date(APP_BUILD_VERSION);
+    _ver = ' <span title="Versão deste sistema: ' + APP_BUILD_VERSION + '" style="font-size:9px;color:#64748B;margin-left:6px">v' + _dv.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }).replace(', ', ' ') + '</span>';
+  } catch (e) {}
+  if (el) el.innerHTML = '<span style="font-size:11px;color:#94A3B8">' + user.nome + '</span> <span class="role-badge role-' + user.perfil + '" style="font-size:9px">' + (labels[user.perfil]||user.perfil) + '</span>' + _ver;
 }
 
 function _moverModaisParaBody() {

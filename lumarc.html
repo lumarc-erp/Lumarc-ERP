@@ -2223,7 +2223,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
       <h2 style="font-size:16px;font-weight:800">📝 Requisições de Compra</h2>
-      <p style="font-size:12px;color:var(--muted);margin-top:3px">Solicitações aguardando aprovação são convertidas em Pedido de Compra após liberação.</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:3px">Aqui se cria e se aprova a requisição. Depois da liberação, o pedido é emitido no Omie e o número dele fica registrado na RC.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input type="text" id="rc-search" placeholder="🔍 Nº, fornecedor, item..." style="width:200px" oninput="renderRCTab()">
@@ -2233,7 +2233,8 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         <option value="aguardando">Aguardando aprovação</option>
         <option value="aprovada">Aprovada</option>
         <option value="reprovada">Reprovada</option>
-        <option value="convertida">Convertida em PC</option>
+        <option value="pedido">Pedido emitido (Omie)</option>
+        <option value="convertida">Convertida em PC (legado)</option>
         <option value="recebida">Recebida / Concluída</option>
       </select>
       <select id="rc-filter-origem" onchange="renderRCTab()" style="width:140px">
@@ -2377,6 +2378,31 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
       <button class="btn btn-ghost" id="rc-btn-solicitar" onclick="salvarRCComoAguardando()" style="display:none">📨 Enviar para aprovação</button>
       <button class="btn btn-primary" id="rc-btn-salvar" onclick="saveRC()">Salvar rascunho</button>
       <button class="btn btn-orange" id="rc-btn-converter" onclick="converterRCemPC()" style="display:none">🛒 Converter em PC</button>
+      <button class="btn btn-orange" id="rc-btn-omie" onclick="abrirRCOmie()" style="display:none">🛒 Registrar pedido no Omie</button>
+      <button class="btn btn-green" id="rc-btn-recebido" onclick="marcarRCRecebida()" style="display:none">📦 Marcar recebido</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL PEDIDO EMITIDO NO OMIE (RC) ===== -->
+<div class="modal-overlay" id="modal-rc-omie">
+  <div class="modal" style="width:480px">
+    <div class="modal-hdr">
+      <div class="modal-title" id="rc-omie-titulo">🛒 Pedido emitido no Omie</div>
+      <button class="modal-close" onclick="closeModal('modal-rc-omie')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rc-omie-id">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">O pedido de compra é emitido no Omie. Registre aqui o número dele para ligar a RC ao pedido e acompanhar o recebimento.</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nº do pedido no Omie <span style="color:#DC2626">*</span></label><input type="text" id="rc-omie-num" placeholder="Ex.: 000123"></div>
+        <div class="form-group"><label>Data do pedido</label><input type="date" id="rc-omie-data"></div>
+        <div class="form-group full"><label>Observação (opcional)</label><input type="text" id="rc-omie-obs" placeholder="Fornecedor, condição, previsão de entrega..."></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-rc-omie')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarRCOmie()">💾 Registrar pedido</button>
     </div>
   </div>
 </div>
@@ -4468,7 +4494,8 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <div style="font-size:12px;font-weight:800;margin-bottom:4px">🧩 MÓDULOS USADOS</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Desligar esconde as telas e para de gerar registros automáticos (contas, movimentos de estoque). Nenhum dado é apagado e dá para religar quando quiser. Só o administrador altera.</div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-alm"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-alm"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-pc"> 🛒 Pedido de Compra interno — emitir o PC dentro do ERP. Desligado: o pedido é emitido no Omie e a RC registra o número</label>
     <button class="btn btn-ghost btn-sm" onclick="salvarModulos()">Aplicar módulos</button>
   </div>
 
@@ -10084,10 +10111,12 @@ function selectSubgrupo(sgId, pillEl) {
 function renderSubgroupTabs(sg) {
   const subBar = g('subtabs-bar');
   subBar.style.display = 'flex';
-  subBar.innerHTML = sg.tabs.map(t =>
+  // "Pedidos de Compra" só aparece com o Pedido de Compra interno ligado (hoje o pedido é emitido no Omie).
+  const tabs = sg.tabs.filter(t => !(t.id === 'tab-compras' && !moduloAtivo('pc')));
+  subBar.innerHTML = tabs.map(t =>
     `<div class="subtab${activeTabId === t.id ? ' active' : ''}" onclick="switchTab('${t.id}',this)">${t.label}</div>`
   ).join('');
-  const toActivate = sg.tabs.find(t => t.id === activeTabId) ? activeTabId : sg.tabs[0].id;
+  const toActivate = tabs.find(t => t.id === activeTabId) ? activeTabId : tabs[0].id;
   switchTab(toActivate);
 }
 
@@ -17247,7 +17276,7 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // margem de 3 horas — e dava falso alarme sempre que a publicação saía mais de 3 horas
 // depois do horário gravado. Comparar dois identificadores publicados juntos não depende
 // de relógio nem de margem. Falhas de rede/API nunca acendem o aviso.
-const APP_BUILD_VERSION = '2026-10-06T09:35:00Z';
+const APP_BUILD_VERSION = '2026-10-06T11:30:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -22526,6 +22555,7 @@ var _pendenciasInfo = {
   solfam:   { label: 'SOL(s) com família a definir',           icone:'🏷️', count:0, cor:'#FED7AA' },
   rcpc:     { label: 'RC(s) aguardando Pedido de Compra',      icone:'🛒', count:0, cor:'#FDBA74' },
   pcreceb:  { label: 'Pedido(s) de Compra aguardando recebimento', icone:'📦', count:0, cor:'#93C5FD' },
+  rcrec:    { label: 'RC(s) com pedido no Omie aguardando recebimento', icone:'📦', count:0, cor:'#93C5FD' },
   osaguard: { label: 'OS aguardando ação (Engenharia/Compra/Material)', icone:'🔧', count:0, cor:'#C4B5FD' },
   osfat:    { label: 'OS aguardando faturamento',              icone:'🧾', count:0, cor:'#5EEAD4' },
 };
@@ -22557,7 +22587,13 @@ function pendenciaItemClick(key) {
   if (key === 'orc') { irParaOrcamentosFiltrado('aguardando'); return; }
   if (key === 'envio') { irParaOrcamentosFiltrado('liberado'); return; }
   if (key === 'sol' || key === 'solcrit' || key === 'solcli' || key === 'solfam') { goToTab('tab-solicitacoes'); return; }
-  if (key === 'rc' || key === 'rcpc') { goToTab('tab-rc'); return; }
+  if (key === 'rc') { goToTab('tab-rc'); return; }
+  if (key === 'rcpc' || key === 'rcrec') {
+    goToTab('tab-rc');
+    var _f = g('rc-filter-status');
+    if (_f) { _f.value = (key === 'rcpc') ? 'aprovada' : 'pedido'; renderRCTab(); }
+    return;
+  }
   if (key === 'pcreceb') { goToTab('tab-compras'); return; }
   if (key === 'osaguard' || key === 'osfat') { goToTab('tab-os'); return; }
 }
@@ -22615,7 +22651,12 @@ function updateTopbarSolBadge() {
 // agir em cada etapa varia (compras, engenharia, financeiro).
 function updateTopbarRCPCBadge() {
   var pendentes = (DB.requisicoes || []).filter(function(r) { return r.status === 'aprovada'; });
+  _pendenciasInfo.rcpc.label = moduloAtivo('pc') ? 'RC(s) aguardando Pedido de Compra' : 'RC(s) aprovada(s) aguardando pedido no Omie';
   _pendenciasInfo.rcpc.count = pendentes.length;
+  renderTopbarPendencias();
+}
+function updateTopbarRCRecBadge() {
+  _pendenciasInfo.rcrec.count = (DB.requisicoes || []).filter(function(r) { return r.status === 'pedido'; }).length;
   renderTopbarPendencias();
 }
 
@@ -22624,7 +22665,7 @@ function updateTopbarPCRecebBadge() {
     var s = pc.status || '';
     return s !== 'Recebido' && s !== 'Recebido com divergência' && s !== 'Cancelado';
   });
-  _pendenciasInfo.pcreceb.count = pendentes.length;
+  _pendenciasInfo.pcreceb.count = moduloAtivo('pc') ? pendentes.length : 0;
   renderTopbarPendencias();
 }
 
@@ -22643,6 +22684,7 @@ function updateTopbarOSFatBadge() {
 
 function updateTopbarCadeiaBadges() {
   updateTopbarRCPCBadge();
+  updateTopbarRCRecBadge();
   updateTopbarPCRecebBadge();
   updateTopbarOSAguardBadge();
   updateTopbarOSFatBadge();
@@ -22914,6 +22956,7 @@ const RC_STATUS = {
   aprovada:   { label:'Aprovada',             color:'#065F46', bg:'#D1FAE5' },
   reprovada:  { label:'Reprovada',            color:'#991B1B', bg:'#FEE2E2' },
   convertida: { label:'Convertida em PC',     color:'#6D28D9', bg:'#EDE9FE' },
+  pedido:     { label:'Pedido emitido (Omie)', color:'#0F766E', bg:'#CCFBF1' },
   recebida:   { label:'Recebida / Concluída', color:'#1D4ED8', bg:'#DBEAFE' },
 };
 
@@ -22991,7 +23034,9 @@ function openRCModal(origemTipo, origemRef, editId, osRefParam) {
   var status = rc ? rc.status : 'rascunho';
   g('rc-btn-salvar').style.display    = (!isEdit || status === 'rascunho') ? '' : 'none';
   g('rc-btn-solicitar').style.display = (status === 'rascunho') ? '' : 'none';
-  g('rc-btn-converter').style.display = (status === 'aprovada') ? '' : 'none';
+  g('rc-btn-converter').style.display = (status === 'aprovada' && moduloAtivo('pc')) ? '' : 'none';
+  g('rc-btn-omie').style.display      = (status === 'aprovada' && !moduloAtivo('pc')) ? '' : 'none';
+  g('rc-btn-recebido').style.display  = (status === 'pedido') ? '' : 'none';
 
   // Histórico
   var histBox = g('rc-hist-box');
@@ -23145,7 +23190,7 @@ function aprovarRC() {
   rc.status      = 'aprovada';
   rc.aprovadoPor = currentUser ? currentUser.nome : 'Sistema';
   rc.obsAprovador= obs;
-  rc.updatedAt   = now;
+  rc.updatedAt   = now; rc._updatedAt = new Date().toISOString();
   rc.historico   = rc.historico || [];
   rc.historico.push({ data:now, acao:'Aprovada', obs:obs, user: currentUser ? currentUser.nome : '' });
   saveAll(true);
@@ -23165,7 +23210,7 @@ function reprovarRC() {
   rc.status      = 'reprovada';
   rc.aprovadoPor = currentUser ? currentUser.nome : 'Sistema';
   rc.obsAprovador= obs;
-  rc.updatedAt   = now;
+  rc.updatedAt   = now; rc._updatedAt = new Date().toISOString();
   rc.historico   = rc.historico || [];
   rc.historico.push({ data:now, acao:'Reprovada', obs:obs, user: currentUser ? currentUser.nome : '' });
   saveAll(true);
@@ -23176,6 +23221,62 @@ function reprovarRC() {
 }
 
 // ---- CONVERTER EM PC ----
+// ---- PEDIDO EMITIDO NO OMIE ----
+// O pedido de compra nasce no Omie. No ERP a RC termina aqui: registra-se o número do pedido
+// e, depois, o recebimento. Toda mudança grava _updatedAt — é ele que decide qual cópia vence
+// na sincronização entre computadores.
+function abrirRCOmie(rcId) {
+  var id = rcId || rcEditId;
+  var rc = (DB.requisicoes || []).find(function(r) { return r.id === id; });
+  if (!rc) return;
+  if (rc.status !== 'aprovada') { showToast('Só uma RC aprovada pode ter o pedido registrado.', 'warn'); return; }
+  g('rc-omie-id').value = rc.id;
+  g('rc-omie-num').value = rc.omieNum || '';
+  g('rc-omie-data').value = new Date().toISOString().split('T')[0];
+  g('rc-omie-obs').value = '';
+  g('rc-omie-titulo').textContent = '🛒 Pedido emitido no Omie — ' + rc.num;
+  openModal('modal-rc-omie');
+}
+function salvarRCOmie() {
+  var rc = (DB.requisicoes || []).find(function(r) { return r.id === g('rc-omie-id').value; });
+  if (!rc) return;
+  var num = g('rc-omie-num').value.trim();
+  if (!num) { alert('Informe o número do pedido no Omie.'); return; }
+  var agora = new Date(), now = agora.toLocaleString('pt-BR');
+  var obs = g('rc-omie-obs').value.trim();
+  rc.status    = 'pedido';
+  rc.omieNum   = num;
+  rc.omieData  = g('rc-omie-data').value || agora.toISOString().split('T')[0];
+  rc.omiePor   = currentUser ? currentUser.nome : 'Sistema';
+  rc.updatedAt = now; rc._updatedAt = new Date().toISOString();
+  rc._updatedAt = agora.toISOString();
+  rc.historico = rc.historico || [];
+  rc.historico.push({ data: now, acao: 'Pedido emitido no Omie nº ' + num, obs: obs, user: currentUser ? currentUser.nome : '' });
+  saveAll(true);
+  closeModal('modal-rc-omie'); closeModal('modal-rc');
+  renderRCTab(); updateTopbarRCBadge(); updateTopbarCadeiaBadges();
+  showToast('🛒 RC ' + rc.num + ': pedido ' + num + ' do Omie registrado.');
+}
+function marcarRCRecebida(rcId) {
+  var id = rcId || rcEditId;
+  var rc = (DB.requisicoes || []).find(function(r) { return r.id === id; });
+  if (!rc) return;
+  if (rc.status !== 'pedido') { showToast('Registre primeiro o pedido emitido no Omie.', 'warn'); return; }
+  if (!confirm('Marcar o material da RC ' + rc.num + ' como RECEBIDO?')) return;
+  var agora = new Date(), now = agora.toLocaleString('pt-BR');
+  rc.status     = 'recebida';
+  rc.recebidoEm = agora.toISOString().split('T')[0];
+  rc.recebidoPor = currentUser ? currentUser.nome : 'Sistema';
+  rc.updatedAt  = now; rc._updatedAt = new Date().toISOString();
+  rc._updatedAt = agora.toISOString();
+  rc.historico  = rc.historico || [];
+  rc.historico.push({ data: now, acao: 'Material recebido', obs: '', user: currentUser ? currentUser.nome : '' });
+  saveAll(true);
+  closeModal('modal-rc');
+  renderRCTab(); updateTopbarRCBadge(); updateTopbarCadeiaBadges();
+  showToast('📦 RC ' + rc.num + ' marcada como recebida.');
+}
+
 function converterRCemPC(rcId) {
   var id = rcId || rcEditId;
   var rc = DB.requisicoes.find(function(r) { return r.id === id; });
@@ -23244,7 +23345,7 @@ function converterRCemPC(rcId) {
   // Mark RC as converted
   rc.status  = 'convertida';
   rc.pcRef   = pcNum;
-  rc.updatedAt = now;
+  rc.updatedAt = now; rc._updatedAt = new Date().toISOString();
   rc.historico = rc.historico || [];
   rc.historico.push({ data:now, acao:'Convertida em PC ' + pcNum, obs:'', user: currentUser ? currentUser.nome : '' });
 
@@ -23555,8 +23656,8 @@ function renderOSAguardandoPanel() {
 function deleteRC(rcId) {
   var rc = (DB.requisicoes||[]).find(function(r){ return r.id === rcId; });
   if (!rc) return;
-  if (rc.status === 'convertida') {
-    showToast('RC convertida em PC não pode ser excluída.', 'warn'); return;
+  if (rc.status === 'convertida' || rc.status === 'pedido') {
+    showToast(rc.status === 'pedido' ? 'RC com pedido emitido no Omie não pode ser excluída.' : 'RC convertida em PC não pode ser excluída.', 'warn'); return;
   }
   if (!confirm('Excluir RC ' + rc.num + '?\nEsta ação não pode ser desfeita.')) return;
   registrarTombstone(rcId);
@@ -23578,13 +23679,14 @@ function renderRCTab() {
     var pend = rcs.filter(function(r) { return r.status === 'aguardando'; }).length;
     var aprov= rcs.filter(function(r) { return r.status === 'aprovada';   }).length;
     var conv = rcs.filter(function(r) { return r.status === 'convertida'; }).length;
+    var ped  = rcs.filter(function(r) { return r.status === 'pedido'; }).length;
     var valPend = rcs.filter(function(r) { return r.status === 'aguardando'; })
                      .reduce(function(s,r) { return s + (r.totalEst||0); }, 0);
     kEl.innerHTML = [
       { icon:'📝', val:rcs.length,       lbl:'Total RCs',         cls:'blue'   },
       { icon:'⏳', val:pend,             lbl:'Aguardando',         cls:'orange' },
       { icon:'✅', val:aprov,            lbl:'Aprovadas',          cls:'green'  },
-      { icon:'🛒', val:conv,             lbl:'Convertidas em PC',  cls:'blue'   },
+      moduloAtivo('pc') ? { icon:'🛒', val:conv, lbl:'Convertidas em PC', cls:'blue' } : { icon:'🛒', val:ped + conv, lbl:'Pedido emitido', cls:'blue' },
       { icon:'💰', val:fmt(valPend),     lbl:'Valor pendente',     cls:'orange' },
     ].map(function(k) {
       return '<div class="d-kpi ' + k.cls + '"><div class="d-kpi-icon">' + k.icon + '</div>'
@@ -23668,12 +23770,15 @@ function renderRCTab() {
       + (rc.obs ? '<div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">' + rc.obs.substring(0,100) + '</div>' : '')
       + (rc.aprovadoPor ? '<div style="margin-top:6px"><span class="aprovador-badge">✅ ' + (rc.status === 'reprovada' ? 'Reprovada' : 'Aprovada') + ' por ' + rc.aprovadoPor + (rc.obsAprovador ? ': ' + rc.obsAprovador : '') + '</span></div>' : '')
       + (rc.pcRef ? '<div style="font-size:10px;color:#6D28D9;margin-top:4px">🛒 PC gerado: <strong>' + rc.pcRef + '</strong></div>' : '')
+      + (rc.omieNum ? '<div style="font-size:10px;color:#0F766E;margin-top:4px">🛒 Pedido no Omie: <strong>' + _solEsc(rc.omieNum) + '</strong>' + (rc.omieData ? ' · ' + new Date(rc.omieData + 'T12:00:00').toLocaleDateString('pt-BR') : '') + (rc.omiePor ? ' · ' + _solEsc(rc.omiePor) : '') + '</div>' : '')
+      + (rc.recebidoEm ? '<div style="font-size:10px;color:#1D4ED8;margin-top:4px">📦 Recebido em <strong>' + new Date(rc.recebidoEm + 'T12:00:00').toLocaleDateString('pt-BR') + '</strong>' + (rc.recebidoPor ? ' · ' + _solEsc(rc.recebidoPor) : '') + '</div>' : '')
       + '<div style="display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap;align-items:center">'
       + '<span class="rc-status-badge rc-s-' + rc.status + '" style="background:' + st.bg + ';color:' + st.color + '">' + st.label + '</span>'
       + '<button class="btn btn-ghost btn-xs" onclick="openRCModal(null,null,\'' + rc.id + '\')">✏️ Abrir</button>'
       + (canApproveThis ? '<button class="btn btn-green btn-xs" onclick="aprovacaoRapida(\'' + rc.id + '\',true)">✅ Aprovar</button>' : '')
       + (canApproveThis ? '<button class="btn btn-danger btn-xs" onclick="aprovacaoRapidaDialog(\'' + rc.id + '\')">❌ Reprovar</button>' : '')
-      + (rc.status === 'aprovada' ? '<button class="btn btn-orange btn-xs" onclick="converterRCemPC(\'' + rc.id + '\')">🛒 Converter em PC</button>' : '')
+      + (rc.status === 'aprovada' ? (moduloAtivo('pc') ? '<button class="btn btn-orange btn-xs" onclick="converterRCemPC(\'' + rc.id + '\')">🛒 Converter em PC</button>' : '<button class="btn btn-orange btn-xs" onclick="abrirRCOmie(\'' + rc.id + '\')">🛒 Registrar pedido no Omie</button>') : '')
+      + (rc.status === 'pedido' ? '<button class="btn btn-green btn-xs" onclick="marcarRCRecebida(\'' + rc.id + '\')">📦 Marcar recebido</button>' : '')
       + '</div>'
       + '</div>';
   }).join('');
@@ -23687,7 +23792,7 @@ function aprovacaoRapida(rcId, aprovar) {
   rc.status      = aprovar ? 'aprovada' : 'reprovada';
   rc.aprovadoPor = currentUser ? currentUser.nome : 'Sistema';
   rc.obsAprovador= '';
-  rc.updatedAt   = now;
+  rc.updatedAt   = now; rc._updatedAt = new Date().toISOString();
   rc.historico   = rc.historico || [];
   rc.historico.push({ data:now, acao: aprovar ? 'Aprovada' : 'Reprovada', obs:'Aprovação rápida', user: currentUser ? currentUser.nome : '' });
   saveAll(true);
@@ -23704,7 +23809,7 @@ function aprovacaoRapidaDialog(rcId) {
   if (!rc) return;
   var now = new Date().toLocaleString('pt-BR');
   rc.status = 'reprovada'; rc.aprovadoPor = currentUser ? currentUser.nome : 'Sistema';
-  rc.obsAprovador = motivo; rc.updatedAt = now;
+  rc.obsAprovador = motivo; rc.updatedAt = now; rc._updatedAt = new Date().toISOString();
   rc.historico = rc.historico || [];
   rc.historico.push({ data:now, acao:'Reprovada', obs:motivo, user: currentUser ? currentUser.nome : '' });
   saveAll(true); renderRCTab(); updateTopbarRCBadge(); updateTopbarCadeiaBadges();
@@ -31622,14 +31727,16 @@ function renderModulosCard() {
   card.style.display = (currentUser && currentUser.perfil === 'admin') ? '' : 'none';
   if (g('mod-fin')) g('mod-fin').checked = moduloAtivo('fin');
   if (g('mod-alm')) g('mod-alm').checked = moduloAtivo('alm');
+  if (g('mod-pc'))  g('mod-pc').checked  = moduloAtivo('pc');
 }
 function salvarModulos() {
   if (!currentUser || currentUser.perfil !== 'admin') { showToast('Só o administrador pode alterar os módulos.', 'warn'); return; }
   if (!DB.config) DB.config = {};
-  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked };
+  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked, pc: !!(g('mod-pc') && g('mod-pc').checked) };
   DB.config._updatedAt = new Date().toISOString();
   saveAll(true);
   aplicarModulosNaNav();
+  try { var _gd = TAB_GROUPS[activeGroup]; var _sg = _gd && _gd.subgrupos ? _gd.subgrupos.find(function(x) { return x.id === _activeSubgrupo; }) : null; if (_sg) renderSubgroupTabs(_sg); } catch (e) {}
   if (typeof updateTopbarCadeiaBadges === 'function') updateTopbarCadeiaBadges();
   if (typeof updateTopbarAlerts === 'function') updateTopbarAlerts();
   showToast('✅ Módulos atualizados.');

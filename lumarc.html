@@ -4504,11 +4504,11 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   <div id="mod-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;display:none">
     <div style="font-size:12px;font-weight:800;margin-bottom:4px">🧩 MÓDULOS USADOS</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Desligar esconde as telas e para de gerar registros automáticos (contas, movimentos de estoque). Nenhum dado é apagado e dá para religar quando quiser. Só o administrador altera.</div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-cas"> 💧 Cascata de cobertura — substitui o Financeiro antigo (esconde-o e para a geração automática de salários)</label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-alm"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-pc"> 🛒 Pedido de Compra interno — emitir o PC dentro do ERP. Desligado: o pedido é emitido no Omie e a RC registra o número</label>
-    <button class="btn btn-ghost btn-sm" onclick="salvarModulos()">Aplicar módulos</button>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin" onchange="salvarModulos()" style="width:auto;flex:none"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-cas" onchange="salvarModulos()" style="width:auto;flex:none"> 💧 Cascata de cobertura — substitui o Financeiro antigo (esconde-o e para a geração automática de salários)</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-alm" onchange="salvarModulos()" style="width:auto;flex:none"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-pc" onchange="salvarModulos()" style="width:auto;flex:none"> 🛒 Pedido de Compra interno — emitir o PC dentro do ERP. Desligado: o pedido é emitido no Omie e a RC registra o número</label>
+    <div style="font-size:11px;color:var(--muted)">As opções são aplicadas assim que você marca ou desmarca.</div>
   </div>
 
   <div style="display:flex;justify-content:flex-end;gap:8px">
@@ -17776,7 +17776,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-10-08T15:00:00Z';
+const APP_BUILD_VERSION = '2026-10-08T16:10:00Z';
 
 async function verificarVersaoAtualizada() {
   try {

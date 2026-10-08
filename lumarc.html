@@ -1058,6 +1058,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   <div class="tab"         data-group="orc"     onclick="switchGroup('orc',this)">📋 Operações</div>
   <div class="tab"         data-group="cad"     onclick="switchGroup('cad',this)">🗂️ Cadastros</div>
   <div class="tab"         data-group="fin"     onclick="switchGroup('fin',this)">💰 Financeiro</div>
+  <div class="tab"         data-group="cas"     onclick="switchGroup('cas',this)" style="display:none">💧 Cascata</div>
   <div class="tab"         data-group="alm"     onclick="switchGroup('alm',this)">🏪 Almoxarifado</div>
   <div class="tab"         data-group="apo"     onclick="switchGroup('apo',this)">⏱️ Apontamentos</div>
   <div class="tab"         data-group="qual"    onclick="switchGroup('qual',this)">🔬 Qualidade</div>
@@ -1550,6 +1551,16 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   </div>
 </div>
 </div>
+
+<!-- ===================== CASCATA (fin2) ===================== -->
+<div id="tab-cas-painel" class="tab-content"></div>
+<div id="tab-cas-receber" class="tab-content"></div>
+<div id="tab-cas-pagar" class="tab-content"></div>
+<div id="tab-cas-guias" class="tab-content"></div>
+<div id="tab-cas-pessoal" class="tab-content"></div>
+<div id="tab-cas-fixas" class="tab-content"></div>
+<div id="tab-cas-dividas" class="tab-content"></div>
+<div id="tab-cas-param" class="tab-content"></div>
 
 <!-- ===================== TAB: FINANCEIRO DASHBOARD ===================== -->
 <div id="tab-fin-dash" class="tab-content">
@@ -4494,6 +4505,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <div style="font-size:12px;font-weight:800;margin-bottom:4px">🧩 MÓDULOS USADOS</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Desligar esconde as telas e para de gerar registros automáticos (contas, movimentos de estoque). Nenhum dado é apagado e dá para religar quando quiser. Só o administrador altera.</div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-cas"> 💧 Cascata de cobertura — substitui o Financeiro antigo (esconde-o e para a geração automática de salários)</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-alm"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-pc"> 🛒 Pedido de Compra interno — emitir o PC dentro do ERP. Desligado: o pedido é emitido no Omie e a RC registra o número</label>
     <button class="btn btn-ghost btn-sm" onclick="salvarModulos()">Aplicar módulos</button>
@@ -6854,6 +6866,13 @@ let DB = {
   boletins:         [], // boletins de medição vinculados a contratos
   solicitacoesOrc:  [], // quadro de solicitações de orçamento pendentes (post-its)
   solFamilias:      [], // famílias de serviço do questionário guiado da SOL
+  fin2Receber: [],
+  fin2Pagar: [],
+  fin2Guias: [],
+  fin2Dividas: [],
+  fin2Fixas: [],
+  fin2Pessoas: [],
+  fin2Param: [],
   solPerguntas:     [], // perguntas do questionário (modelos por família)
   autonomias:       [], // nível de autonomia (1/2/3) por usuário e família de serviço
   saldoRealConfig:  { valor: 0, data: '', origem: '' }, // saldo bancário real
@@ -9421,7 +9440,7 @@ function saveAll(silent) {
     config:        DB.config,
     tributario:    DB.tributario,
     folhaMensal:   DB.folhaMensal,
-    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
+    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, fin2Receber: DB.fin2Receber, fin2Pagar: DB.fin2Pagar, fin2Guias: DB.fin2Guias, fin2Dividas: DB.fin2Dividas, fin2Fixas: DB.fin2Fixas, fin2Pessoas: DB.fin2Pessoas, fin2Param: DB.fin2Param, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
     transferenciasCaixa: DB.transferenciasCaixa || [],
     regrasClassificacaoCaixa: DB.regrasClassificacaoCaixa || null,
     nfAliases: DB.nfAliases || {},
@@ -9688,6 +9707,13 @@ function applyLoadedData(save, skipOrcData) {
   DB.requisicoes    = mergeArrayByKey(DB.requisicoes, save.requisicoes, 'id');
   DB.solicitacoesOrc = mergeArrayByKey(DB.solicitacoesOrc, save.solicitacoesOrc, 'id');
   DB.solFamilias     = mergeArrayByKey(DB.solFamilias, save.solFamilias, 'id');
+  DB.fin2Receber = mergeArrayByKey(DB.fin2Receber, save.fin2Receber, 'id');
+  DB.fin2Pagar = mergeArrayByKey(DB.fin2Pagar, save.fin2Pagar, 'id');
+  DB.fin2Guias = mergeArrayByKey(DB.fin2Guias, save.fin2Guias, 'id');
+  DB.fin2Dividas = mergeArrayByKey(DB.fin2Dividas, save.fin2Dividas, 'id');
+  DB.fin2Fixas = mergeArrayByKey(DB.fin2Fixas, save.fin2Fixas, 'id');
+  DB.fin2Pessoas = mergeArrayByKey(DB.fin2Pessoas, save.fin2Pessoas, 'id');
+  DB.fin2Param = mergeArrayByKey(DB.fin2Param, save.fin2Param, 'id');
   DB.solPerguntas    = mergeArrayByKey(DB.solPerguntas, save.solPerguntas, 'id');
   DB.autonomias      = mergeArrayByKey(DB.autonomias, save.autonomias, 'id');
   DB.caixasConfig  = save.caixasConfig  || null;
@@ -9872,6 +9898,16 @@ const TAB_GROUPS = {
     { id:'tab-tributario',  label:'💼 Tributário' },
     { id:'tab-folha',       label:'👷 Folha de Pagamento' },
   ],  // personalização opens as side panel
+  cas: [
+    { id:'tab-cas-painel',   label:'💧 Painel' },
+    { id:'tab-cas-receber',  label:'📥 A receber' },
+    { id:'tab-cas-pagar',    label:'📤 A pagar' },
+    { id:'tab-cas-guias',    label:'🧾 Impostos' },
+    { id:'tab-cas-pessoal',  label:'👷 Pessoal' },
+    { id:'tab-cas-fixas',    label:'🏠 Fixas' },
+    { id:'tab-cas-dividas',  label:'🏦 Dívidas' },
+    { id:'tab-cas-param',    label:'⚙️ Parâmetros' },
+  ],
   alm: [
     { id:'tab-alm-recebimento', label:'📦 Recebimento de Material' },
     { id:'tab-alm-estoque',     label:'📦 Estoque' },
@@ -10175,6 +10211,14 @@ function switchTab(tabId, subTabEl) {
     'tab-boletins':      renderBoletins,
     'tab-notas':         renderNotasFiscais,
     'tab-fin-dash':      renderFinDashboard,
+    'tab-cas-painel':    renderCasPainel,
+    'tab-cas-receber':   renderCasReceber,
+    'tab-cas-pagar':     renderCasPagar,
+    'tab-cas-guias':     renderCasGuias,
+    'tab-cas-pessoal':   renderCasPessoal,
+    'tab-cas-fixas':     renderCasFixas,
+    'tab-cas-dividas':   renderCasDividas,
+    'tab-cas-param':     renderCasParam,
     'tab-plano':         renderPlanoContas,
     'tab-dre':           renderDREGerencial,
     'tab-ranking-forn':  renderRankingFornecedores,
@@ -17276,7 +17320,463 @@ const JSONBIN_BASE   = 'https://api.jsonbin.io/v3';
 // margem de 3 horas — e dava falso alarme sempre que a publicação saía mais de 3 horas
 // depois do horário gravado. Comparar dois identificadores publicados juntos não depende
 // de relógio nem de margem. Falhas de rede/API nunca acendem o aviso.
-const APP_BUILD_VERSION = '2026-10-06T11:30:00Z';
+
+// ════════════════════════════════════════════════════════════════════════════
+// CASCATA DE COBERTURA (módulo fin2) — ISOLADO
+// Coleções próprias: fin2Receber, fin2Pagar, fin2Guias, fin2Dividas,
+// fin2Fixas, fin2Pessoas, fin2Param. Só LÊ OS/orçamentos/clientes/funcionários.
+// Ligado por DB.config.modulos.cascata. Nada aqui altera OS, kanban ou PDFs.
+// ════════════════════════════════════════════════════════════════════════════
+var FIN2_SEED = {"rec":[{"em":"2026-09-01","nf":"2579","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":611.8,"ret":18.35,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV EUMBUCHAMENTO TAMPA MOTOR OS 5238 | Ped. 4500929822 - ORC-2026-5238 | ISS R$ 18.35 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2580","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":5110.58,"ret":153.31,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. USINAGEM ARANHAS/FLANGES BRACOS NOVOS | Ped. 4500925248 - ORC-2026-5142 | ISS R$ 153.31 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2581","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":1520.8,"ret":45.62,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV EMBUCHAMENTO SUPORTE PINO OS 5233 | Ped. 4500929873 - ORC-2026-5233 | ISS R$ 45.62 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2582","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":1447.65,"ret":43.42,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV USINAGEM ENXERTO ROLDANA OS 5233 | Ped. 4500929874 - ORC-2026-5233 | ISS R$ 43.42 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2583","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":698.7,"ret":20.96,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV RECUPERACAO REBOLO OS 5233 | Ped. 4500929875 - ORC-2026-5233 | ISS R$ 20.96 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2584","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":468.2,"ret":14.04,"venc":"2026-09-16","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV USIN CILINDRO PNEUMATICO OS 4831 | Ped. 4500881655 - OS - 4831 | ISS R$ 14.04 (a ser retido na fonte)"},{"em":"2026-09-01","nf":"2917","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":1545.94,"ret":0.0,"venc":"2026-09-29","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. KIT DE EIXOS MOVIDO RODA BL150 | Ped."},{"em":"2026-09-01","nf":"2918","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":6568.38,"ret":0.0,"venc":"2026-09-29","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. EIXO AC 1045 75MM 284MM CORTADOR EXTRUS; SUPORTE FIX OSCIL TRAS 45MM E5050BR SMC | Ped."},{"em":"2026-09-01","nf":"2919","cli":"ETESCO CONSTRUCOES E COMERCIO LTDA","tipo":"Venda","bruto":5751.27,"ret":0.0,"venc":"2026-10-01","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. MESA DE APOIO; SAVER | Ped."},{"em":"2026-09-01","nf":"2920","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":2416.05,"ret":0.0,"venc":"2026-09-29","rec":true,"dtRec":"2026-09-09","obs":"SUPORTE BARRA ST-BTW WEG | Ped."},{"em":"2026-09-02","nf":"2585","cli":"MFX DO BRASIL EQUIPAMENTOS DE PETROLEO LTDA","tipo":"Serviço","bruto":13550.13,"ret":0.0,"venc":"2026-10-02","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERVICO DE MANUTENCAO / SERVICO DE MANUTENCAO / DESENHO: | PEP: | Ped. 8500001396 - ORC-2026-5124 | ISS R$ 406.50 (a recolher pelo prestador)"},{"em":"2026-09-02","nf":"2921","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":5274.65,"ret":0.0,"venc":"2026-09-30","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. FLANGE AC 1020 170MM 50MM | Ped."},{"em":"2026-09-03","nf":"2586","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":3564.34,"ret":106.93,"venc":"2026-09-18","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV MAN GERAL EXTR OS 4981- 13 A 17/07 | Ped. 4500922280 - ORC-2026-4981 | ISS R$ 106.93 (a ser retido na fonte)"},{"em":"2026-09-04","nf":"2587","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":2701.06,"ret":81.03,"venc":"2026-09-19","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV MAN GERAL EXTR OS 5040- 21 A 24/07 | Ped. 4500922232 - ORC-2026-5040 | ISS R$ 81.03 (a ser retido na fonte)"},{"em":"2026-09-10","nf":"2922","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":4787.28,"ret":0.0,"venc":"2026-10-08","rec":false,"dtRec":null,"obs":"BICO LIMPEZA TP RSC 1/4POL | Venda de Producao do Estabelecimento | Ped. 4500914648 ORC-2026-5004 | ICMS R$ 981.39"},{"em":"2026-09-11","nf":"2588","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":9500.34,"ret":285.01,"venc":"2026-09-26","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERVICO DE USINAGEM DA ROSCA DO FUSO | Ped. 4500922417 - ORC-2026-5017 | ISS R$ 285.01 (a ser retido na fonte)"},{"em":"2026-09-11","nf":"2925","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":461.46,"ret":0.0,"venc":"2026-10-09","rec":false,"dtRec":null,"obs":"PONTEIRA AI DIAM 12MM | Venda de Producao do Estabelecimento | Ped. 4500937905  | ICMS R$ 94.60"},{"em":"2026-09-11","nf":"2926","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":944.4,"ret":0.0,"venc":"2026-10-26","rec":false,"dtRec":null,"obs":"GUIA;SAE 1020;15,87X32MM;ROTO MOLD;FERRY | Venda de Producao do Estabelecimento | Ped. 4500926845  | ICMS R$ 193.60"},{"em":"2026-09-14","nf":"2927","cli":"NORDESTE INDUSTRIA E COMERCIO LTDA","tipo":"Venda","bruto":2637.0,"ret":0.0,"venc":"2026-10-29","rec":false,"dtRec":null,"obs":"GUIA;SAE 1020;15,87X32MM;ROTO MOLD;FERRY | Venda Producao Estabelecimento, destinada a ZFM/ALC | Ped. 4500925011  | ICMS R$ 316.44"},{"em":"2026-09-15","nf":"2589","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":6672.04,"ret":200.16,"venc":"2026-09-30","rec":false,"dtRec":null,"obs":"VENCIDA — sem recebimento identificado no Bradesco até 07/10. SERV USINAGEM BRACO CORTADOR L04 | Ped. 4500939127 - ORC-2026-5215 | ISS R$ 200.16 (a ser retido na fonte)"},{"em":"2026-09-19","nf":"2929","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":2051.07,"ret":0.0,"venc":"2026-10-17","rec":false,"dtRec":null,"obs":"EIXO CORT AC 20MM 120MM | Venda de Producao do Estabelecimento | Ped. 4500937122  | ICMS R$ 420.47"},{"em":"2026-09-19","nf":"2930","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":2211.69,"ret":0.0,"venc":"2026-10-17","rec":false,"dtRec":null,"obs":"EIXO AC 1045 75MM 284MM CORTADOR EXTRUS | Venda de Producao do Estabelecimento | Ped. 4500939905  | ICMS R$ 453.40"},{"em":"2026-09-25","nf":"2931","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":1596.88,"ret":0.0,"venc":"2026-10-23","rec":false,"dtRec":null,"obs":"EIXO AC 1045 75MM 284MM CORTADOR EXTRUS | Venda de Producao do Estabelecimento | Ped. 4500944311 ORC-2026-5288 | ICMS R$ 327.36"},{"em":"2026-09-30","nf":"2590","cli":"PEROXY BAHIA INDUSTRIA QUIMICA LTDA","tipo":"Serviço","bruto":2369.34,"ret":71.08,"venc":"2026-10-15","rec":false,"dtRec":null,"obs":"MANUTENCAO E REPAROS ABERTURA DE FUROS NA CHAPA DE AÇO 1/2 E 5/8 | Ped.  | ISS R$ 71.08 (a ser retido na fonte)"},{"em":"2026-09-30","nf":"2932","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":2629.35,"ret":0.0,"venc":"2026-10-28","rec":false,"dtRec":null,"obs":"EIXO AC 1045 75MM 284MM CORTADOR EXTRUS | Venda de Producao do Estabelecimento | Ped. 4500937122 ORC-2026-5263 | ICMS R$ 539.02"},{"em":"2026-09-30","nf":"2933","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":5893.95,"ret":0.0,"venc":"2026-10-28","rec":false,"dtRec":null,"obs":"PORCA SEG SIST ABERTURA CR4.6-CR5.2 4; BUCHA;ROTOLINE/018565 | Venda de Producao do Estabelecimento | Ped. 4500921628 ORC-5010/ORC-5013 | ICMS R$ 1208.26"},{"em":"2026-10-01","nf":"2591","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":3529.64,"ret":105.88,"venc":"2026-10-16","rec":false,"dtRec":null,"obs":"SERVICO DE USINAGEM DO FUSO 80MM | Ped. 4500940145 - ORC-2026-5269 | ISS R$ 105.88 (a ser retido na fonte)"},{"em":"2026-10-05","nf":"2934","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":1600.41,"ret":0.0,"venc":"2026-11-02","rec":false,"dtRec":null,"obs":"EIXO AC 1045 20MM 360,4MM | Venda de Producao do Estabelecimento | Ped. 4500937133 ORC-2026-5261 | ICMS R$ 328.08"},{"em":"2026-10-06","nf":"2592","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":1058.66,"ret":31.75,"venc":"2026-10-21","rec":false,"dtRec":null,"obs":"SERV USINAGEM ENXERTO ROLAMENTO OS5276 | Ped. 4500949908 - ORC-2026-5276 | ISS R$ 31.75 (a ser retido na fonte)"},{"em":"2026-10-06","nf":"2593","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":1280.29,"ret":38.4,"venc":"2026-10-21","rec":false,"dtRec":null,"obs":"SERV USIN TENSOR ALUMINIO OS 5276 | Ped. 4500949961 - ORC-2026-5276 | ISS R$ 38.40 (a ser retido na fonte)"},{"em":"2026-10-06","nf":"2594","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Serviço","bruto":529.33,"ret":15.87,"venc":"2026-10-21","rec":false,"dtRec":null,"obs":"SERV USINAGEM PONTEIRA REDUTOR OS 5276 | Ped. 4500949958 - ORC-2026-5276 | ISS R$ 15.87 (a ser retido na fonte)"},{"em":"2026-10-06","nf":"2935","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":2565.31,"ret":0.0,"venc":"2026-11-03","rec":false,"dtRec":null,"obs":"BUCHA CONICA AC 30MM 48MM 48X30 LUMARC | Venda de Producao do Estabelecimento | Ped. 4500949964 ORC-2026-5277 | ICMS R$ 525.89"},{"em":"2026-10-06","nf":"2936","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":1486.86,"ret":0.0,"venc":"2026-11-05","rec":false,"dtRec":null,"obs":"EIXO AC 2POL 530MM | Venda de Producao do Estabelecimento | Ped. 4500950017 ORC-2026-5295 | ICMS R$ 304.81"},{"em":"2026-10-06","nf":"2937","cli":"FORTLEV INDUSTRIA E COMERCIO DE PLASTICOS LTDA","tipo":"Venda","bruto":922.92,"ret":0.0,"venc":"2026-11-03","rec":false,"dtRec":null,"obs":"PONTEIRA AI DIAM 12MM | Venda de Producao do Estabelecimento | Ped. 4500943700 ORC-2026-5300 | ICMS R$ 189.20"}],"gu":[{"venc":"2026-08-09","desc":"ICMS – 07/2026 (DAE)","valor":11623.85,"pago":true,"dtPg":"2026-08-10"},{"venc":"2026-08-10","desc":"ISS próprio – 07/2026","valor":364.91,"pago":true,"dtPg":"2026-08-10"},{"venc":"2026-08-25","desc":"PIS – 07/2026 (DARF 8109)","valor":412.68,"pago":false,"dtPg":null},{"venc":"2026-08-25","desc":"COFINS – 07/2026 (DARF 2172)","valor":1904.69,"pago":false,"dtPg":null},{"venc":"2026-09-09","desc":"ICMS – 08/2026 (DAE)","valor":5833.18,"pago":true,"dtPg":"2026-09-09"},{"venc":"2026-09-10","desc":"ISS próprio – 08/2026","valor":415.27,"pago":true,"dtPg":"2026-09-09"},{"venc":"2026-09-25","desc":"PIS – 08/2026 (DARF 8109)","valor":454.92,"pago":false,"dtPg":null},{"venc":"2026-09-25","desc":"COFINS – 08/2026 (DARF 2172)","valor":2099.61,"pago":false,"dtPg":null},{"venc":"2026-10-09","desc":"ICMS – 09/2026 (DAE)","valor":6800.61,"pago":false,"dtPg":null},{"venc":"2026-10-10","desc":"ISS próprio – 09/2026","valor":406.5,"pago":false,"dtPg":null},{"venc":"2026-10-23","desc":"PIS – 09/2026 (DARF 8109)","valor":603.22,"pago":false,"dtPg":null},{"venc":"2026-10-23","desc":"COFINS – 09/2026 (DARF 2172)","valor":2784.1,"pago":false,"dtPg":null},{"venc":"2026-10-23","desc":"CSLL 3º tri/2026 + IPI 09/2026 (DARF único)","valor":4152.9,"pago":false,"dtPg":null},{"venc":"2026-10-30","desc":"IRPJ – 3º tri/2026 (DARF 2089)","valor":5862.5,"pago":false,"dtPg":null}],"fo":[{"data":"2026-08-25","forn":"HB Metais Camaçari","desc":"1045 LAMINADO REDONDO 3.1/2\"; 1045 TREFILADO REDONDO 7/8\"; 4340 LAMINADO REDONDO 1.1/8\"; A","ref":null,"valor":259.0,"venc":"2026-10-09","status":"A pagar","dtPg":null,"obs":"NF-e 21606 — parcela 2/2"},{"data":"2026-09-10","forn":"HB Metais Camaçari","desc":"1045 TREFILADO REDONDO 1.1/4\"; 4140 LAMINADO REDONDO 1\"; FERRO FUNDIDO NODULAR 45012 40MM","ref":null,"valor":180.0,"venc":"2026-10-09","status":"A pagar","dtPg":null,"obs":"NF-e 21863 — parcela 1/1"},{"data":"2026-09-11","forn":"HB Metais Camaçari","desc":"1045 TREFILADO QUADRADO 4MM; 1045 TREFILADO QUADRADO 5MM; 1045 TREFILADO REDONDO 1/2\"; 414","ref":null,"valor":327.0,"venc":"2026-10-09","status":"A pagar","dtPg":null,"obs":"NF-e 21894 — parcela 1/2"},{"data":"2026-08-27","forn":"Eletroplasma","desc":"CHAPA INOX 316-L, 5,00 X 600 X 1300 MM (Corte laser)","ref":null,"valor":1068.0,"venc":"2026-10-11","status":"A pagar","dtPg":null,"obs":"NF-e 64841 — parcela 2/2"},{"data":"2026-08-12","forn":"Guerreiro Ferro e Aço","desc":"METALON GA 40X40X1,25 #18.","ref":null,"valor":1386.66,"venc":"2026-10-11","status":"A pagar","dtPg":null,"obs":"NF-e 40144 — parcela 3/3"},{"data":"2026-09-14","forn":"HB Metais Camaçari","desc":"ALUMINIO REDONDO 6351 2.1/2\"; FERRO FUNDIDO NODULAR 45012 82MM","ref":null,"valor":141.0,"venc":"2026-10-12","status":"A pagar","dtPg":null,"obs":"NF-e 21917 — parcela 1/1"},{"data":"2026-09-21","forn":"Oxipolo Gases","desc":"OXIGENIO INDUSTRIAL","ref":null,"valor":136.64,"venc":"2026-10-12","status":"A pagar","dtPg":null,"obs":"NF-e 3366 — parcela 1/1"},{"data":"2026-09-01","forn":"HB Metais Camaçari","desc":"INOX 304 REDONDO 5.1/2\"","ref":null,"valor":516.0,"venc":"2026-10-13","status":"A pagar","dtPg":null,"obs":"NF-e 21719 — parcela 2/2"},{"data":"2026-09-15","forn":"HB Metais Camaçari","desc":"TUBO MECANICO LAMINADO 106M X 82MM VMEC 134 AP","ref":null,"valor":145.0,"venc":"2026-10-13","status":"A pagar","dtPg":null,"obs":"NF-e 21938 — parcela 1/1"},{"data":"2026-09-17","forn":"HB Metais Camaçari","desc":"INOX 304 REDONDO 3/8\"; INOX 304 REDONDO 2\"; INOX 304 REDONDO 1.1/4\"","ref":null,"valor":440.0,"venc":"2026-10-15","status":"A pagar","dtPg":null,"obs":"NF-e 21981 — parcela 1/3"},{"data":"2026-09-18","forn":"HB Metais Camaçari","desc":"4140 LAMINADO REDONDO 2.1/2\"","ref":null,"valor":206.0,"venc":"2026-10-16","status":"A pagar","dtPg":null,"obs":"NF-e 21994 — parcela 1/1"},{"data":"2026-09-18","forn":"Kaman Ferragens","desc":"PINO GUIA DIN 6325 M6X60; PF ALLEN C/C 1/4-20X3; PF ALLEN C/AB 10.9 M3-0,50X16; PORCA SEXT","ref":null,"valor":97.64,"venc":"2026-10-16","status":"A pagar","dtPg":null,"obs":"NF-e 29936 — parcela 1/1"},{"data":"2026-09-17","forn":"M&F Comercial","desc":"LUVA 1/2 ACO INOX BSP 316 150LBS; LUVA 3/4 ACO INOX BSP 316 150LBS; MANOMETRO DN100 INOX G","ref":null,"valor":640.69,"venc":"2026-10-17","status":"A pagar","dtPg":null,"obs":"NF-e 93304 — parcela 1/1"},{"data":"2026-09-21","forn":"HB Metais Camaçari","desc":"INOX 316L REDONDO 5/8\"; INOX 316L REDONDO 1.1/4\"; INOX 316L REDONDO 1.3/8\"; INOX 316L REDO","ref":null,"valor":483.0,"venc":"2026-10-19","status":"A pagar","dtPg":null,"obs":"NF-e 22022 — parcela 1/1"},{"data":"2026-09-21","forn":"M&F Comercial","desc":"BUJAO 1/2 ACO INOX BSP 316 150LBS; BUJAO 3/4 ACO INOX BSP 316 150LBS; GRELHA INOX QUADRADA","ref":null,"valor":110.2,"venc":"2026-10-21","status":"A pagar","dtPg":null,"obs":"NF-e 93364 — parcela 1/1"},{"data":"2026-09-11","forn":"HB Metais Camaçari","desc":"1045 TREFILADO QUADRADO 4MM; 1045 TREFILADO QUADRADO 5MM; 1045 TREFILADO REDONDO 1/2\"; 414","ref":null,"valor":327.0,"venc":"2026-10-23","status":"A pagar","dtPg":null,"obs":"NF-e 21894 — parcela 2/2"},{"data":"2026-09-25","forn":"HB Metais Camaçari","desc":"1045 CHAVETA RETANGULAR TREFILADA 10 MM X 8 MM; 1045 CHAVETA RETANGULAR TREFILADA 14 MM X","ref":null,"valor":319.0,"venc":"2026-10-23","status":"A pagar","dtPg":null,"obs":"NF-e 22113 — parcela 1/1"},{"data":"2026-09-23","forn":"M&F Comercial","desc":"MANGUEIRA PU 08MM AZUL 1,5MM; CHAVE ALEN LONGA,08MM          GEDORE","ref":null,"valor":108.6,"venc":"2026-10-23","status":"A pagar","dtPg":null,"obs":"NF-e 93407 — parcela 1/1"},{"data":"2026-09-26","forn":"HB Metais Camaçari","desc":"1045 LAMINADO REDONDO 4.3/4\"; TEFLON PTFE REDONDO 50 MM; TUBO MEC LAM VMEC 134 131mm x 90m","ref":null,"valor":370.0,"venc":"2026-10-24","status":"A pagar","dtPg":null,"obs":"NF-e 22127 — parcela 1/1"},{"data":"2026-09-24","forn":"M&F Comercial","desc":"PENETRANTE VP 30 HI METAL CHECK; CANETA MARCADOR PERMANENTE PRETO PONTA 2.MM TRACO 1MM; CA","ref":null,"valor":166.9,"venc":"2026-10-24","status":"A pagar","dtPg":null,"obs":"NF-e 93429 — parcela 1/1"},{"data":"2026-09-24","forn":"M&F Comercial","desc":"ELETRODO ESAB - 18  7018 2,50MM (CX C/17KG)   ESAB; ELETRODO ESAB - 18  7018 3,25MM (CX C/","ref":null,"valor":388.5,"venc":"2026-10-24","status":"A pagar","dtPg":null,"obs":"NF-e 93443 — parcela 1/1"},{"data":"2026-09-29","forn":"HB Metais Camaçari","desc":"BARRA CHATA A36 4 X 1","ref":null,"valor":288.0,"venc":"2026-10-27","status":"A pagar","dtPg":null,"obs":"NF-e 22147 — parcela 1/1"},{"data":"2026-09-17","forn":"HB Metais Camaçari","desc":"INOX 304 REDONDO 3/8\"; INOX 304 REDONDO 2\"; INOX 304 REDONDO 1.1/4\"","ref":null,"valor":440.0,"venc":"2026-10-29","status":"A pagar","dtPg":null,"obs":"NF-e 21981 — parcela 2/3"},{"data":"2026-09-29","forn":"M&F Comercial","desc":"JOGO ESCOVA 03 PECAS (2793) FERTAK; ESCOVA MANUAL C/CABO 1777 A/INOX 3F INEBRAS; BORRACHA","ref":null,"valor":298.15,"venc":"2026-10-29","status":"A pagar","dtPg":null,"obs":"NF-e 93507 — parcela 1/1"}],"ev":[{"data":"2026-10-16","cat":"Ferramentas e consumíveis","desc":"EPI — MASCARA MASKFACE C/V PFF2S 515094; BOTA COURO PU S/B EL 4065HESS4600FX N40; BOTA COURO PU","valor":456.86,"obs":"Ferimport NF-e 784567 — parcela 1/3 (vence 16/10). Fixas já prevê R$ 160/mês de EPI."}],"pe":[{"nome":"Luis Marcos Souza Conceição","funcao":"Sócio-administrador","mod":"Pró-labore","ativo":true,"rem":6000.0,"vt":0,"ref":30.0,"outros":0,"obs":"Pró-labore fixo proposto no relatório"},{"nome":"Samuel de Jesus Silva","funcao":"Torneiro Mecanico","mod":"Informal (PIX)","ativo":true,"rem":5600.0,"vt":10.0,"ref":20.0,"outros":0,"obs":"Média abr–set/26 nos extratos"},{"nome":"Jairo Silva Machado","funcao":"Soldador","mod":"CLT","ativo":true,"rem":3352.0,"vt":10.0,"ref":20.0,"outros":0,"obs":"Média abr–set/26 nos extratos"},{"nome":"Fabian de Jesus Nery Filho","funcao":"Operacional","mod":"CLT","ativo":true,"rem":2535.0,"vt":10.0,"ref":20.0,"outros":0,"obs":"Média abr–set/26 nos extratos"},{"nome":"Lucas Ramon Costa de Jesus","funcao":"Logística e apoio","mod":"CLT","ativo":true,"rem":2243.0,"vt":10.0,"ref":20.0,"outros":0,"obs":"Média abr–set/26 nos extratos"},{"nome":"Luiz Soares Conceição","funcao":null,"mod":"Informal (PIX)","ativo":true,"rem":2000.0,"vt":0,"ref":20.0,"outros":0,"obs":"Confirmar se trabalha na empresa"},{"nome":"Maria Souza Conceição","funcao":null,"mod":"Informal (PIX)","ativo":true,"rem":1750.0,"vt":0,"ref":20.0,"outros":0,"obs":"Confirmar se trabalha na empresa"},{"nome":"Alan","funcao":"Torneiro Mecanico","mod":"CLT","ativo":true,"rem":4000.0,"vt":21.0,"ref":20.0,"outros":0,"obs":"Média abr–set/26 nos extratos"},{"nome":"Erika Maria da Silva Bezerra","funcao":null,"mod":"Informal (PIX)","ativo":true,"rem":2000.0,"vt":0,"ref":30.0,"outros":0,"obs":"Média abr–set/26 nos extratos"}],"fx":[{"nome":"Energia — Coelba","cat":"Energia","valor":1400.0,"dia":null,"ativa":true,"obs":"Sem pagamento identificado de fev a set/26: verificar atraso"},{"nome":"Água — Embasa","cat":"Água","valor":130.0,"dia":null,"ativa":true,"obs":null},{"nome":"Água mineral","cat":"Água","valor":70.0,"dia":null,"ativa":true,"obs":null},{"nome":"Contabilidade","cat":"Contabilidade","valor":0.0,"dia":null,"ativa":true,"obs":"Não identificada nos extratos: preencher"},{"nome":"Aluguel","cat":"Aluguel","valor":0.0,"dia":null,"ativa":true,"obs":"Preencher se houver"},{"nome":"Internet e telefone — Lexcom","cat":"Telecom/internet","valor":300.0,"dia":null,"ativa":true,"obs":null},{"nome":"Omie (ERP)","cat":"Sistemas","valor":460.0,"dia":null,"ativa":true,"obs":"Três cobranças diferentes nos extratos: conferir duplicidade"},{"nome":"Monitoramento — Lettal Security","cat":"Segurança","valor":473.0,"dia":null,"ativa":true,"obs":null},{"nome":"Seguro de veículo — Bradesco","cat":"Seguros e previdência","valor":221.0,"dia":null,"ativa":true,"obs":null},{"nome":"Previdência — Bradesco Vida","cat":"Seguros e previdência","valor":668.0,"dia":null,"ativa":true,"obs":"Avaliar suspender enquanto houver cheque especial"},{"nome":"Tarifas bancárias (3 bancos)","cat":"Tarifas bancárias","valor":900.0,"dia":null,"ativa":true,"obs":"Negociar pacote com PIX ilimitado"},{"nome":"Combustível e pedágio","cat":"Veículos","valor":250.0,"dia":null,"ativa":true,"obs":null},{"nome":"Marketing — Dino Comunicação","cat":"Marketing","valor":340.0,"dia":null,"ativa":true,"obs":"Manter só com retorno mensurável"},{"nome":"Alelo (VA/VR em lote)","cat":"Benefícios","valor":2700.0,"dia":null,"ativa":true,"obs":"Se lançar refeição por pessoa na aba Pessoal, zerar aqui"},{"nome":"Medicina ocupacional","cat":"Saúde e segurança do trabalho","valor":470.0,"dia":null,"ativa":true,"obs":null},{"nome":"Uniformes e EPI","cat":"Saúde e segurança do trabalho","valor":160.0,"dia":null,"ativa":true,"obs":null}],"dv":[{"nome":"Banco do Brasil — empréstimo","tipo":"Banco","parcela":1290.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Parcela observada ~R$ 1.290: informar prazo e saldo"},{"nome":"BNB — empréstimo","tipo":"Banco","parcela":1330.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Pagamentos irregulares nos extratos: confirmar parcela e prazo"},{"nome":"Capitais de giro Bradesco (contratos 017521 / 017586)","tipo":"Banco","parcela":2800.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Média paga out/25–set/26: confirmar"},{"nome":"Consórcio Bradesco (boleto Bradesco Administradora)","tipo":"Consórcio","parcela":784.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Confirmar bem e situação de contemplação"},{"nome":"Consórcio TG Feira de Santana","tipo":"Consórcio","parcela":285.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":null},{"nome":"Cartão de crédito empresarial (fatura)","tipo":"Cartão de crédito","parcela":3500.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Média das faturas: analisar o conteúdo"},{"nome":"Parcelamento federal (PGFN/RFB)","tipo":"Parcelamento fiscal","parcela":0.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Preencher após levantamento com o contador"},{"nome":"Parcelamento ICMS (SEFAZ-BA)","tipo":"Parcelamento fiscal","parcela":0.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":"Preencher após levantamento com o contador"},{"nome":"Roledson Finamori","tipo":"Pessoa física","parcela":1715.0,"np":null,"prim":null,"taxa":null,"saldo":null,"obs":null}]};
+var FIN2_PARAM_PADRAO = { aliqServ:0.15, aliqVenda:0.25, base:'Vencimento', reserva:0.05, diasUteis:22, horas:176, fornPct:0.15,
+  inss:0.20, rat:0.03, terceiros:0.058, fgts:0.08, prov13:0.0833, provFerias:0.1111, descVT:0.06, inssProlabore:0.20, inssRPA:0.20 };
+var FIN2_MODALIDADES = ['CLT','Pró-labore','Autônomo (RPA)','MEI/PJ','Informal (PIX)','Estágio'];
+var FIN2_NATUREZAS = [['fornecedor','Fornecedor'],['eventual','Eventual'],['investimento','Investimento'],['pessoal','Extra de pessoal']];
+var FIN2_CAT_FIXA = ['Aluguel','Energia','Água','Contabilidade','Telecom/internet','Sistemas','Segurança','Seguros e previdência','Tarifas bancárias','Veículos','Marketing','Benefícios','Saúde e segurança do trabalho','Outros'];
+var FIN2_TIPO_DIV = ['Banco','Cartão de crédito','Consórcio','Parcelamento fiscal','Pessoa física','Financiamento de máquina','Outros'];
+var FIN2_GRIDS = {};
+var _fin2Mes = null;
+var _fin2FiltroNat = '';
+var _fin2SoMes = true;
+
+function fin2_ativo() { return typeof moduloAtivo === 'function' && moduloAtivo('cascata'); }
+function fin2_coll(n) { if (!DB[n]) DB[n] = []; return DB[n]; }
+function fin2_pad(n) { return (n < 10 ? '0' : '') + n; }
+function fin2_mesHoje() { var d = new Date(); return d.getFullYear() + '-' + fin2_pad(d.getMonth() + 1); }
+function fin2_mes() { if (!_fin2Mes) _fin2Mes = fin2_mesHoje(); return _fin2Mes; }
+function fin2_ym(s) { return s ? String(s).slice(0, 7) : ''; }
+function fin2_mesAnt(m) { var p = m.split('-'); var y = +p[0], mo = +p[1] - 1; if (mo < 1) { mo = 12; y--; } return y + '-' + fin2_pad(mo); }
+function fin2_mesNome(m) { var p = m.split('-'); var n = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']; return n[+p[1] - 1] + '/' + p[0]; }
+function fin2_num(v) {
+  if (typeof v === 'number') return v;
+  var s = String(v == null ? '' : v).replace(/[R$\s]/g, '');
+  if (!s) return 0;
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  var n = parseFloat(s); return isNaN(n) ? 0 : n;
+}
+function fin2_r2(v) { return Math.round((+v || 0) * 100) / 100; }
+function fin2_novoId() { return 'f2-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function fin2_esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function fin2_addMeses(iso, n) { // EDATE
+  var p = iso.split('-'); var y = +p[0], m = +p[1] - 1 + n, d = +p[2];
+  y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+  var ult = new Date(y, m + 1, 0).getDate();
+  return y + '-' + fin2_pad(m + 1) + '-' + fin2_pad(Math.min(d, ult));
+}
+
+// ── Parâmetros ──────────────────────────────────────────────────────────────
+function fin2_P() {
+  var r = fin2_coll('fin2Param').find(function(x) { return x.id === 'param'; });
+  return Object.assign({}, FIN2_PARAM_PADRAO, r || {});
+}
+function fin2_setParam(k, v) {
+  var a = fin2_coll('fin2Param');
+  var r = a.find(function(x) { return x.id === 'param'; });
+  if (!r) { r = { id: 'param' }; a.push(r); }
+  r[k] = v; r._updatedAt = new Date().toISOString();
+  saveAll(true);
+}
+
+// ── Custo mensal de uma pessoa (reproduz a aba Pessoal da planilha) ─────────
+function fin2_custoPessoa(p, P) {
+  P = P || fin2_P();
+  var E = +p.rem || 0, clt = p.mod === 'CLT';
+  var enc = P.inss + P.rat + P.terceiros;
+  var I = clt ? E * enc : (p.mod === 'Pró-labore' ? E * P.inssProlabore : (p.mod === 'Autônomo (RPA)' ? E * P.inssRPA : 0));
+  var J = clt ? E * P.fgts : 0;
+  var K = clt ? E * P.prov13 : 0;
+  var L = clt ? E * P.provFerias : 0;
+  var M = clt ? (K + L) * (enc + P.fgts) : 0;
+  var N = clt ? E * P.fgts * 0.4 : 0;
+  var vtBruto = (+p.vt || 0) * P.diasUteis;
+  var O = clt ? Math.max(0, vtBruto - E * P.descVT) : vtBruto;
+  var Pp = (+p.ref || 0) * P.diasUteis;
+  var Q = p.ativo === false ? 0 : E + (+p.outros || 0) + I + J + K + L + M + N + O + Pp;
+  return { total: Q, hora: E ? Q / P.horas : 0, ratio: E ? Q / E : 0 };
+}
+function custoMensalCascata(p) { return fin2_custoPessoa(p).total; }
+
+// ── Dívida: parcela no mês ──────────────────────────────────────────────────
+function fin2_dividaUltimo(d) { return (d.prim && d.np) ? fin2_addMeses(d.prim, (+d.np) - 1) : ''; }
+function fin2_dividaNoMes(d, mes) {
+  if (!(+d.parcela)) return 0;
+  var ult = fin2_dividaUltimo(d);
+  var okIni = !d.prim || d.prim <= mes + '-31';
+  var okFim = !ult || ult >= mes + '-01';
+  return (okIni && okFim) ? (+d.parcela) : 0;
+}
+
+// ── Previsão (Etapa 3 — gancho) ─────────────────────────────────────────────
+function fin2_previsto(mes) { return { total: 0, itens: [] }; }
+
+// ── Cálculo do Painel ───────────────────────────────────────────────────────
+function fin2_calc(mes) {
+  var P = fin2_P(), base = P.base;
+  var liq = function(r) { return (+r.bruto || 0) - (+r.ret || 0); };
+  var fat = 0, recM = 0, notas = 0, venc = 0, vencRec = 0;
+  fin2_coll('fin2Receber').forEach(function(r) {
+    if (fin2_ym(r.em) === mes) { fat += (+r.bruto || 0); notas++; }
+    if (r.rec && r.dtRec && fin2_ym(r.dtRec) === mes) recM += liq(r);
+    if (fin2_ym(r.venc) === mes) { venc += liq(r); if (r.rec) vencRec += liq(r); }
+  });
+  var baseGar = base === 'Recebido' ? recM : (base === 'Vencimento' ? venc : fat);
+  var comp = base === 'Vencimento' ? fin2_mesAnt(mes) : mes;
+  var sB = 0, sH = 0, sJ = 0;
+  fin2_coll('fin2Receber').forEach(function(r) {
+    if (fin2_ym(r.em) !== comp) return;
+    var H = (+r.bruto || 0) * (r.tipo === 'Venda' ? P.aliqVenda : P.aliqServ);
+    sB += (+r.bruto || 0); sH += H; sJ += Math.max(0, H - (+r.ret || 0));
+  });
+  var estImp = base === 'Faturado' ? sH : sJ;
+  var aliqMed = sB === 0 ? P.aliqServ : estImp / sB;
+  var guias = 0;
+  fin2_coll('fin2Guias').forEach(function(g2) { if (fin2_ym(g2.venc) === mes) guias += (+g2.valor || 0); });
+  var impostos = guias > 0 ? guias : estImp;
+  var pagar = { fornecedor: 0, eventual: 0, investimento: 0, pessoal: 0 };
+  fin2_coll('fin2Pagar').forEach(function(x) {
+    var m = fin2_ym(x.venc) || fin2_ym(x.data);
+    if (m === mes && pagar[x.natureza] !== undefined) pagar[x.natureza] += (+x.valor || 0);
+  });
+  var pessoal = pagar.pessoal;
+  fin2_coll('fin2Pessoas').forEach(function(p) { pessoal += fin2_custoPessoa(p, P).total; });
+  var fixas = 0; fin2_coll('fin2Fixas').forEach(function(f) { if (f.ativa !== false) fixas += (+f.valor || 0); });
+  var dividas = 0; fin2_coll('fin2Dividas').forEach(function(d) { dividas += fin2_dividaNoMes(d, mes); });
+  var prev = fin2_previsto(mes);
+  var needs = [
+    { k: 'impostos', nome: 'Impostos', desc: guias > 0 ? 'guias lançadas' : 'estimativa', v: impostos },
+    { k: 'fornecedores', nome: 'Fornecedores', v: pagar.fornecedor },
+    { k: 'pessoal', nome: 'Pessoal', desc: 'com encargos, provisões e extras', v: pessoal },
+    { k: 'fixas', nome: 'Despesas fixas', v: fixas },
+    { k: 'dividas', nome: 'Empréstimos, cartão e parcelamentos', v: dividas },
+    { k: 'eventuais', nome: 'Despesas eventuais', v: pagar.eventual },
+    { k: 'investimentos', nome: 'Investimentos', v: pagar.investimento },
+    { k: 'reserva', nome: 'Reserva', desc: Math.round(P.reserva * 100) + '% da base', v: 0 }
+  ];
+  function cascata(b) {
+    var acum = 0;
+    needs.forEach(function(n) { if (n.k === 'reserva') n.v = P.reserva * b; });
+    var rows = needs.map(function(n) {
+      var disp = Math.max(0, b - acum);
+      var cob = Math.min(n.v, disp);
+      acum += n.v;
+      return { k: n.k, nome: n.nome, desc: n.desc, nec: n.v, disp: disp, cob: cob, pct: n.v ? cob / n.v : null, falta: n.v - cob,
+        sit: n.v === 0 ? 'Sem valor' : (cob >= n.v - 0.005 ? 'Coberto' : (cob > 0 ? 'Parcial' : 'Descoberto')) };
+    });
+    var tn = rows.reduce(function(s, r) { return s + r.nec; }, 0), tc = rows.reduce(function(s, r) { return s + r.cob; }, 0);
+    return { base: b, rows: rows, totNec: tn, totCob: tc, pct: tn ? tc / tn : 1, falta: tn - tc, sobra: Math.max(0, b - tn) };
+  }
+  var gar = cascata(baseGar);
+  var n = function(k) { return needs.filter(function(x) { return x.k === k; })[0].v; };
+  var den26 = 1 - aliqMed - P.fornPct - P.reserva, den27 = 1 - aliqMed - P.fornPct;
+  var meta = {
+    aliqMed: aliqMed,
+    cobrirTudo: den26 > 0 ? (n('pessoal') + n('fixas') + n('dividas') + n('eventuais') + n('investimentos')) / den26 : null,
+    equilibrio: den27 > 0 ? (n('pessoal') + n('fixas') + n('dividas') + n('eventuais')) / den27 : null
+  };
+  meta.falta = meta.equilibrio == null ? null : Math.max(0, meta.equilibrio - baseGar);
+  return { mes: mes, P: P, fat: fat, recM: recM, notas: notas, venc: venc, vencRec: vencRec, aReceber: venc - vencRec,
+    baseGar: baseGar, prev: prev, gar: gar, prevCasc: prev.total > 0 ? cascata(baseGar + prev.total) : null,
+    meta: meta, impFonte: guias > 0 ? 'guias' : 'estimativa', impComp: comp };
+}
+
+// ── Grade editável genérica ─────────────────────────────────────────────────
+function fin2_cellHtml(gid, rec, c) {
+  var v = rec[c.k];
+  var base = 'data-g="' + gid + '" data-id="' + rec.id + '" data-k="' + c.k + '" data-t="' + c.t + '"';
+  var st = 'width:100%;min-width:' + (c.w || 90) + 'px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:12px;background:var(--panel);color:var(--text)';
+  if (c.t === 'calc') return '<span class="f2c" data-g="' + gid + '" data-id="' + rec.id + '" data-k="' + c.k + '">' + fin2_esc(c.f(rec)) + '</span>';
+  if (c.t === 'sel') return '<select ' + base + ' onchange="fin2_onChange(this)" style="' + st + '">' + (c.opts.map(function(o) { var ov = Array.isArray(o) ? o[0] : o, ol = Array.isArray(o) ? o[1] : o; return '<option value="' + fin2_esc(ov) + '"' + (String(v) === String(ov) ? ' selected' : '') + '>' + fin2_esc(ol) + '</option>'; }).join('')) + '</select>';
+  if (c.t === 'bool') return '<select ' + base + ' onchange="fin2_onChange(this)" style="' + st + '"><option value="1"' + (v !== false ? ' selected' : '') + '>Sim</option><option value="0"' + (v === false ? ' selected' : '') + '>Não</option></select>';
+  if (c.t === 'date') return '<input type="date" ' + base + ' value="' + fin2_esc(v || '') + '" onchange="fin2_onChange(this)" style="' + st + '">';
+  if (c.t === 'num') return '<input type="text" inputmode="decimal" ' + base + ' value="' + (v || v === 0 ? String(fin2_r2(v)).replace('.', ',') : '') + '" onchange="fin2_onChange(this)" style="' + st + ';text-align:right;font-family:var(--mono)">';
+  return '<input type="text" ' + base + ' value="' + fin2_esc(v || '') + '" onchange="fin2_onChange(this)" style="' + st + '">';
+}
+function fin2_grid(gid, hostId, cfg) {
+  FIN2_GRIDS[gid] = Object.assign({ hostId: hostId }, cfg);
+  fin2_gridRender(gid);
+}
+function fin2_gridRows(gid) {
+  var cfg = FIN2_GRIDS[gid], arr = fin2_coll(cfg.coll).filter(cfg.filter || function() { return true; });
+  var sk = cfg.sort;
+  if (sk) arr = arr.slice().sort(function(a, b) { return String(a[sk] || '9999').localeCompare(String(b[sk] || '9999')); });
+  return arr;
+}
+function fin2_gridRender(gid) {
+  var cfg = FIN2_GRIDS[gid], host = g(cfg.hostId); if (!host) return;
+  var rows = fin2_gridRows(gid);
+  var h = '<div class="tbl-wrap" style="background:var(--panel);border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>';
+  cfg.cols.forEach(function(c) { h += '<th style="text-align:' + (c.t === 'num' || c.t === 'calc' ? 'right' : 'left') + ';padding:8px 6px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">' + c.l + '</th>'; });
+  h += '<th></th></tr></thead><tbody>';
+  if (!rows.length) h += '<tr><td colspan="' + (cfg.cols.length + 1) + '" style="padding:24px;text-align:center;color:var(--muted)">Nenhum registro. Use “+ Adicionar”.</td></tr>';
+  rows.forEach(function(r) {
+    h += '<tr style="border-bottom:1px solid var(--border)">';
+    cfg.cols.forEach(function(c) { h += '<td style="padding:4px 6px;text-align:' + (c.t === 'calc' ? 'right' : 'left') + '">' + fin2_cellHtml(gid, r, c) + '</td>'; });
+    h += '<td style="padding:4px"><button class="btn btn-ghost btn-xs" title="Excluir" onclick="fin2_del(\'' + gid + '\',\'' + r.id + '\')">✕</button></td></tr>';
+  });
+  h += '</tbody>' + (cfg.totals ? '<tfoot><tr id="f2tot-' + gid + '"></tr></tfoot>' : '') + '</table></div>';
+  host.innerHTML = h;
+  fin2_gridTotals(gid);
+}
+function fin2_gridTotals(gid) {
+  var cfg = FIN2_GRIDS[gid], el = g('f2tot-' + gid); if (!el || !cfg.totals) return;
+  var rows = fin2_gridRows(gid), h = '';
+  cfg.cols.forEach(function(c, i) {
+    var t = cfg.totals[c.k];
+    var val = t ? rows.reduce(function(s, r) { return s + (t === 'calc' ? fin2_num(c.f(r)) : (+r[c.k] || 0)); }, 0) : null;
+    h += '<td style="padding:8px 6px;font-weight:700;text-align:right;font-family:var(--mono);border-top:2px solid var(--border)">' + (i === 0 ? '<span style="font-family:var(--sans)">Total (' + rows.length + ')</span>' : (val == null ? '' : fmt(val))) + '</td>';
+  });
+  el.innerHTML = h + '<td></td>';
+}
+function fin2_onChange(el) {
+  var gid = el.dataset.g, id = el.dataset.id, k = el.dataset.k, t = el.dataset.t;
+  var cfg = FIN2_GRIDS[gid]; if (!cfg) return;
+  var rec = fin2_coll(cfg.coll).find(function(x) { return x.id === id; }); if (!rec) return;
+  var v = el.value;
+  if (t === 'num') v = fin2_num(v);
+  else if (t === 'bool') v = v === '1';
+  else if (t === 'date') v = v || null;
+  rec[k] = v; rec._updatedAt = new Date().toISOString();
+  if (cfg.onSet) cfg.onSet(rec, k);
+  saveAll(true);
+  document.querySelectorAll('.f2c[data-g="' + gid + '"][data-id="' + id + '"]').forEach(function(sp) {
+    var c = cfg.cols.filter(function(x) { return x.k === sp.dataset.k; })[0]; if (c) sp.textContent = c.f(rec);
+  });
+  fin2_gridTotals(gid);
+  if (cfg.after) cfg.after();
+}
+function fin2_add(gid) {
+  var cfg = FIN2_GRIDS[gid]; if (!cfg) return;
+  var rec = Object.assign({ id: fin2_novoId(), _updatedAt: new Date().toISOString() }, cfg.defaults ? cfg.defaults() : {});
+  fin2_coll(cfg.coll).push(rec); saveAll(true); fin2_gridRender(gid);
+}
+function fin2_del(gid, id) {
+  var cfg = FIN2_GRIDS[gid]; if (!cfg) return;
+  if (!confirm('Excluir este registro?')) return;
+  var a = fin2_coll(cfg.coll), i = a.findIndex(function(x) { return x.id === id; });
+  if (i >= 0) { a.splice(i, 1); if (typeof registrarTombstone === 'function') registrarTombstone(id); saveAll(true); fin2_gridRender(gid); }
+}
+
+// ── Barra de ferramentas comum ──────────────────────────────────────────────
+function fin2_toolbar(gid, titulo, sub, opts) {
+  opts = opts || {};
+  var h = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:200px"><h2 style="font-size:16px;font-weight:800">' + titulo + '</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">' + sub + '</p></div>';
+  if (opts.mes) h += '<label style="font-size:11px;color:var(--muted);font-weight:600">Mês <input type="month" value="' + fin2_mes() + '" onchange="fin2_setMes(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)"></label>' +
+    '<label style="font-size:12px;display:flex;gap:4px;align-items:center"><input type="checkbox" ' + (_fin2SoMes ? 'checked' : '') + ' onchange="fin2_setSoMes(this.checked)"> só este mês</label>';
+  if (opts.extra) h += opts.extra;
+  h += '<button class="btn btn-primary btn-sm" onclick="fin2_add(\'' + gid + '\')">+ Adicionar</button></div>';
+  return h;
+}
+function fin2_setMes(v) { if (v) { _fin2Mes = v; fin2_rerenderAtiva(); } }
+function fin2_setSoMes(b) { _fin2SoMes = !!b; fin2_rerenderAtiva(); }
+function fin2_rerenderAtiva() { if (typeof activeTabId !== 'undefined' && typeof switchTab === 'function') switchTab(activeTabId); }
+
+// ── Telas ───────────────────────────────────────────────────────────────────
+function fin2_hostPrep(tabId, inner) {
+  var t = g(tabId); if (!t) return null;
+  t.innerHTML = '<div style="padding:20px 24px 60px;max-width:1600px;margin:0 auto">' + inner + '</div>';
+  return t;
+}
+function fin2_mesFiltro(campo) { return function(r) { return !_fin2SoMes || fin2_ym(r[campo]) === fin2_mes() || (campo === 'venc' && !r.venc && fin2_ym(r.data) === fin2_mes()); }; }
+
+function renderCasReceber() {
+  fin2_hostPrep('tab-cas-receber', fin2_toolbar('cas-rec', '📥 Notas a receber', 'Uma linha por nota fiscal emitida. A cascata usa o vencimento (líquido = bruto − retenções).', { mes: true }) + '<div id="cas-rec-host"></div>');
+  var P = fin2_P();
+  fin2_grid('cas-rec', 'cas-rec-host', {
+    coll: 'fin2Receber', sort: 'venc', filter: function(r) { return !_fin2SoMes || fin2_ym(r.venc) === fin2_mes() || fin2_ym(r.em) === fin2_mes(); },
+    defaults: function() { return { em: new Date().toISOString().slice(0, 10), nf: '', cli: '', tipo: 'Serviço', bruto: 0, ret: 0, venc: null, rec: false, dtRec: null, obs: '' }; },
+    cols: [
+      { k: 'em', l: 'Emissão', t: 'date' }, { k: 'nf', l: 'Nº NF', t: 'text', w: 60 }, { k: 'cli', l: 'Cliente', t: 'text', w: 220 },
+      { k: 'tipo', l: 'Tipo', t: 'sel', opts: ['Serviço', 'Venda'] }, { k: 'bruto', l: 'Bruto', t: 'num' }, { k: 'ret', l: 'Retenções', t: 'num' },
+      { k: 'liq', l: 'Líquido', t: 'calc', f: function(r) { return fmt((+r.bruto || 0) - (+r.ret || 0)); } },
+      { k: 'venc', l: 'Vencimento', t: 'date' }, { k: 'rec', l: 'Recebida?', t: 'bool' }, { k: 'dtRec', l: 'Data receb.', t: 'date' }, { k: 'obs', l: 'Obs.', t: 'text', w: 200 }
+    ],
+    totals: { bruto: 1, ret: 1, liq: 'calc' }
+  });
+}
+function renderCasPagar() {
+  var ex = '<select onchange="_fin2FiltroNat=this.value;renderCasPagar()" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)"><option value="">Todas as naturezas</option>' +
+    FIN2_NATUREZAS.map(function(n) { return '<option value="' + n[0] + '"' + (_fin2FiltroNat === n[0] ? ' selected' : '') + '>' + n[1] + '</option>'; }).join('') + '</select>';
+  fin2_hostPrep('tab-cas-pagar', fin2_toolbar('cas-pag', '📤 Contas a pagar', 'Fornecedores, eventuais, investimentos e extras de pessoal. O mês é o do vencimento (ou da data, se não houver vencimento).', { mes: true, extra: ex }) + '<div id="cas-pag-host"></div>');
+  fin2_grid('cas-pag', 'cas-pag-host', {
+    coll: 'fin2Pagar', sort: 'venc',
+    filter: function(r) { return (!_fin2FiltroNat || r.natureza === _fin2FiltroNat) && (!_fin2SoMes || (fin2_ym(r.venc) || fin2_ym(r.data)) === fin2_mes()); },
+    defaults: function() { return { natureza: _fin2FiltroNat || 'fornecedor', data: new Date().toISOString().slice(0, 10), venc: null, forn: '', desc: '', ref: '', valor: 0, status: 'A pagar', dtPg: null, obs: '' }; },
+    cols: [
+      { k: 'natureza', l: 'Natureza', t: 'sel', opts: FIN2_NATUREZAS }, { k: 'data', l: 'Data', t: 'date' }, { k: 'venc', l: 'Vencimento', t: 'date' },
+      { k: 'forn', l: 'Fornecedor / credor', t: 'text', w: 160 }, { k: 'desc', l: 'Descrição', t: 'text', w: 240 }, { k: 'ref', l: 'NF/OS vinculada', t: 'text', w: 90 },
+      { k: 'valor', l: 'Valor', t: 'num' }, { k: 'status', l: 'Status', t: 'sel', opts: ['A pagar', 'Pago'] }, { k: 'dtPg', l: 'Data pgto.', t: 'date' }, { k: 'obs', l: 'Obs.', t: 'text', w: 180 }
+    ],
+    totals: { valor: 1 }
+  });
+}
+function renderCasGuias() {
+  fin2_hostPrep('tab-cas-guias', fin2_toolbar('cas-gui', '🧾 Impostos — guias', 'Quando há guia com vencimento no mês, o Painel usa a soma delas no lugar da estimativa (' + Math.round(fin2_P().aliqServ * 100) + '% serviço / ' + Math.round(fin2_P().aliqVenda * 100) + '% venda).', { mes: true }) + '<div id="cas-gui-host"></div>');
+  fin2_grid('cas-gui', 'cas-gui-host', {
+    coll: 'fin2Guias', sort: 'venc', filter: fin2_mesFiltro('venc'),
+    defaults: function() { return { venc: null, desc: '', valor: 0, pago: false, dtPg: null }; },
+    cols: [{ k: 'venc', l: 'Vencimento', t: 'date' }, { k: 'desc', l: 'Tributo / guia (competência)', t: 'text', w: 300 }, { k: 'valor', l: 'Valor', t: 'num' }, { k: 'pago', l: 'Pago?', t: 'bool' }, { k: 'dtPg', l: 'Data pgto.', t: 'date' }],
+    totals: { valor: 1 }
+  });
+}
+function renderCasPessoal() {
+  var ex = '<button class="btn btn-ghost btn-sm" onclick="fin2_syncFuncionarios()">🔄 Trazer de Funcionários</button>';
+  fin2_hostPrep('tab-cas-pessoal', fin2_toolbar('cas-pes', '👷 Pessoal', 'Custo mensal por pessoa com encargos e provisões conforme a modalidade (parâmetros na aba Parâmetros). Extras do mês entram em “Contas a pagar → Extra de pessoal”.', { extra: ex }) + '<div id="cas-pes-host"></div>');
+  var P = fin2_P();
+  fin2_grid('cas-pes', 'cas-pes-host', {
+    coll: 'fin2Pessoas',
+    defaults: function() { return { nome: '', funcao: '', mod: 'CLT', ativo: true, rem: 0, vt: 0, ref: 0, outros: 0, obs: '' }; },
+    cols: [
+      { k: 'nome', l: 'Nome', t: 'text', w: 180 }, { k: 'funcao', l: 'Função', t: 'text', w: 130 }, { k: 'mod', l: 'Modalidade', t: 'sel', opts: FIN2_MODALIDADES },
+      { k: 'ativo', l: 'Ativo?', t: 'bool' }, { k: 'rem', l: 'Remuneração', t: 'num' }, { k: 'vt', l: 'VT R$/dia', t: 'num', w: 60 }, { k: 'ref', l: 'Refeição R$/dia', t: 'num', w: 60 },
+      { k: 'outros', l: 'Outros benef.', t: 'num', w: 70 },
+      { k: 'custo', l: 'CUSTO MENSAL', t: 'calc', f: function(r) { return fmt(fin2_custoPessoa(r).total); } },
+      { k: 'hora', l: 'Custo/hora', t: 'calc', f: function(r) { var c = fin2_custoPessoa(r); return c.hora ? fmt(c.hora) : '—'; } },
+      { k: 'obs', l: 'Obs.', t: 'text', w: 160 }
+    ],
+    totals: { rem: 1, custo: 'calc' }
+  });
+}
+function fin2_syncFuncionarios() {
+  var a = fin2_coll('fin2Pessoas'), add = 0;
+  var chave = function(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ''); };
+  (DB.funcionarios || []).forEach(function(f) {
+    if (f.status === 'inativo') return;
+    var k = chave(f.nome).slice(0, 12);
+    var existe = a.some(function(p) { return p.funcId === f.id || (k && chave(p.nome).indexOf(k) === 0); });
+    if (existe) return;
+    a.push({ id: fin2_novoId(), funcId: f.id, nome: f.nome, funcao: '', mod: 'CLT', ativo: true, rem: +f.sal || 0, vt: 0, ref: 0, outros: +f.outros || 0, obs: 'Trazido de Funcionários — confirme modalidade e benefícios', _updatedAt: new Date().toISOString() });
+    add++;
+  });
+  if (add) saveAll(true);
+  showToast(add ? '✅ ' + add + ' funcionário(s) trazido(s). Confira a modalidade.' : 'Todos os funcionários ativos já estão na lista.');
+  renderCasPessoal();
+}
+function renderCasFixas() {
+  fin2_hostPrep('tab-cas-fixas', fin2_toolbar('cas-fix', '🏠 Despesas fixas', 'Valor mensal recorrente. Marque “Não” em Ativa para tirar do cálculo.') + '<div id="cas-fix-host"></div>');
+  fin2_grid('cas-fix', 'cas-fix-host', {
+    coll: 'fin2Fixas',
+    defaults: function() { return { nome: '', cat: 'Outros', valor: 0, dia: '', ativa: true, obs: '' }; },
+    cols: [{ k: 'nome', l: 'Despesa', t: 'text', w: 240 }, { k: 'cat', l: 'Categoria', t: 'sel', opts: FIN2_CAT_FIXA }, { k: 'valor', l: 'Valor mensal', t: 'num' }, { k: 'dia', l: 'Dia venc.', t: 'text', w: 50 }, { k: 'ativa', l: 'Ativa?', t: 'bool' }, { k: 'obs', l: 'Obs.', t: 'text', w: 260 }],
+    totals: { valor: 1 }
+  });
+}
+function renderCasDividas() {
+  fin2_hostPrep('tab-cas-dividas', fin2_toolbar('cas-div', '🏦 Empréstimos, cartão e parcelamentos', 'Sem nº de parcelas = recorrente (ex.: fatura do cartão). Sem 1º vencimento = ativa em todos os meses.', { mes: true }) + '<div id="cas-div-host"></div>');
+  var mes = fin2_mes();
+  fin2_grid('cas-div', 'cas-div-host', {
+    coll: 'fin2Dividas',
+    defaults: function() { return { nome: '', tipo: 'Banco', parcela: 0, np: null, prim: null, taxa: null, saldo: null, obs: '' }; },
+    cols: [
+      { k: 'nome', l: 'Credor / contrato', t: 'text', w: 240 }, { k: 'tipo', l: 'Tipo', t: 'sel', opts: FIN2_TIPO_DIV }, { k: 'parcela', l: 'Parcela', t: 'num' },
+      { k: 'np', l: 'Nº parcelas', t: 'num', w: 50 }, { k: 'prim', l: '1º vencimento', t: 'date' },
+      { k: 'ult', l: 'Último venc.', t: 'calc', f: function(r) { var u = fin2_dividaUltimo(r); return u ? u.split('-').reverse().join('/') : 'recorrente'; } },
+      { k: 'saldo', l: 'Saldo devedor', t: 'num' },
+      { k: 'noMes', l: 'No mês (' + fin2_mesNome(mes) + ')', t: 'calc', f: function(r) { return fmt(fin2_dividaNoMes(r, fin2_mes())); } },
+      { k: 'obs', l: 'Obs.', t: 'text', w: 220 }
+    ],
+    totals: { parcela: 1, noMes: 'calc' }
+  });
+}
+function renderCasParam() {
+  var P = fin2_P();
+  var pct = function(k, l, step) { return '<label style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;padding:4px 0">' + l + '<span><input type="text" value="' + String(fin2_r2(P[k] * 10000) / 100).replace('.', ',') + '" onchange="fin2_paramPct(\'' + k + '\',this.value)" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:4px;padding:3px 5px;background:var(--panel);color:var(--text)"> %</span></label>'; };
+  var nm = function(k, l) { return '<label style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;padding:4px 0">' + l + '<input type="text" value="' + P[k] + '" onchange="fin2_paramNum(\'' + k + '\',this.value)" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:4px;padding:3px 5px;background:var(--panel);color:var(--text)"></label>'; };
+  var box = function(t, b) { return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">' + t + '</div>' + b + '</div>'; };
+  var temDados = fin2_coll('fin2Receber').length + fin2_coll('fin2Pessoas').length + fin2_coll('fin2Fixas').length;
+  var h = '<div style="margin-bottom:14px"><h2 style="font-size:16px;font-weight:800">⚙️ Parâmetros da Cascata</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Confirme alíquotas e encargos com o contador.</p></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">' +
+    box('Base e impostos', '<label style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0">Base da cascata<select onchange="fin2_setParam(\'base\',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:3px 5px;background:var(--panel);color:var(--text)">' + ['Vencimento', 'Recebido', 'Faturado'].map(function(o) { return '<option' + (P.base === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select></label>' +
+      pct('aliqServ', 'Alíquota sobre NF de serviço') + pct('aliqVenda', 'Alíquota sobre NF de venda') + pct('reserva', 'Reserva (% da base do mês)') + pct('fornPct', 'Fornecedores esperados (% do faturamento)')) +
+    box('Encargos CLT — Lucro Presumido', pct('inss', 'INSS patronal') + pct('rat', 'RAT × FAP') + pct('terceiros', 'Terceiros (Sistema S, sal.-educação)') + pct('fgts', 'FGTS') + pct('prov13', 'Provisão 13º') + pct('provFerias', 'Provisão férias + 1/3') + pct('descVT', 'Desconto de VT do empregado')) +
+    box('Outras modalidades e jornada', pct('inssProlabore', 'INSS sobre pró-labore') + pct('inssRPA', 'INSS sobre autônomo (RPA)') + nm('diasUteis', 'Dias úteis no mês') + nm('horas', 'Horas trabalhadas/mês por pessoa')) +
+    box('Carga inicial', '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">Carrega os dados da planilha “Lumarc Gestão Financeira” (out/2026): 34 notas, 14 guias, 24 parcelas de fornecedor, 1 eventual, 9 pessoas, 16 despesas fixas e 9 dívidas. Só adiciona o que ainda não existe.</p><button class="btn btn-primary btn-sm" onclick="fin2_carregarSeed()">📥 Carregar dados da planilha</button>' + (temDados ? '<p style="font-size:11px;color:var(--muted);margin-top:6px">Já existem ' + temDados + ' registros — o botão não duplica.</p>' : '')) +
+    '</div>';
+  fin2_hostPrep('tab-cas-param', h);
+}
+function fin2_paramPct(k, v) { fin2_setParam(k, fin2_num(v) / 100); }
+function fin2_paramNum(k, v) { fin2_setParam(k, fin2_num(v)); }
+
+function fin2_carregarSeed() {
+  if (!confirm('Carregar os dados iniciais da planilha? Registros já carregados não são duplicados.')) return;
+  var S = FIN2_SEED, add = 0, ts = new Date().toISOString();
+  function put(coll, prefix, arr, map) {
+    var a = fin2_coll(coll);
+    arr.forEach(function(x, i) {
+      var id = 'f2seed-' + prefix + '-' + i;
+      if (a.some(function(y) { return y.id === id; })) return;
+      if (DB._tombstones && DB._tombstones[id]) return;
+      a.push(Object.assign({ id: id, _updatedAt: ts }, map(x))); add++;
+    });
+  }
+  put('fin2Receber', 'rec', S.rec, function(x) { return { em: x.em, nf: x.nf || '', cli: x.cli || '', tipo: x.tipo || 'Serviço', bruto: x.bruto, ret: x.ret, venc: x.venc, rec: !!x.rec, dtRec: x.dtRec, obs: x.obs || '' }; });
+  put('fin2Guias', 'gu', S.gu, function(x) { return { venc: x.venc, desc: x.desc || '', valor: x.valor, pago: !!x.pago, dtPg: x.dtPg }; });
+  put('fin2Pagar', 'fo', S.fo, function(x) { return { natureza: 'fornecedor', data: x.data, venc: x.venc, forn: x.forn || '', desc: x.desc || '', ref: x.ref || '', valor: x.valor, status: x.status === 'Pago' ? 'Pago' : 'A pagar', dtPg: x.dtPg, obs: x.obs || '' }; });
+  put('fin2Pagar', 'ev', S.ev, function(x) { return { natureza: 'eventual', data: x.data, venc: x.data, forn: '', desc: x.desc || '', ref: '', valor: x.valor, status: 'A pagar', dtPg: null, obs: x.obs || '' }; });
+  put('fin2Pessoas', 'pe', S.pe, function(x) { return { nome: x.nome, funcao: x.funcao || '', mod: x.mod || 'CLT', ativo: x.ativo !== false, rem: x.rem, vt: x.vt, ref: x.ref, outros: x.outros, obs: x.obs || '' }; });
+  put('fin2Fixas', 'fx', S.fx, function(x) { return { nome: x.nome, cat: x.cat || 'Outros', valor: x.valor, dia: x.dia || '', ativa: x.ativa !== false, obs: x.obs || '' }; });
+  put('fin2Dividas', 'dv', S.dv, function(x) { return { nome: x.nome, tipo: x.tipo || 'Outros', parcela: x.parcela, np: x.np, prim: x.prim, taxa: x.taxa, saldo: x.saldo, obs: x.obs || '' }; });
+  if (add) saveAll(true);
+  showToast(add ? '✅ ' + add + ' registro(s) carregado(s).' : 'Nada novo para carregar.');
+  renderCasParam();
+}
+
+// ── Painel ──────────────────────────────────────────────────────────────────
+function renderCasPainel() {
+  var c = fin2_calc(fin2_mes()), P = c.P;
+  var cor = { 'Coberto': 'var(--green)', 'Parcial': 'var(--orange)', 'Descoberto': 'var(--red)', 'Sem valor': 'var(--muted)' };
+  var corBg = { 'Coberto': 'var(--green-light)', 'Parcial': 'var(--orange-light)', 'Descoberto': 'var(--red-light)', 'Sem valor': 'var(--bg)' };
+  var kpi = function(l, v, s) { return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:160px;flex:1"><div style="font-size:11px;color:var(--muted);font-weight:600">' + l + '</div><div style="font-size:18px;font-weight:800;font-family:var(--mono);margin-top:2px">' + v + '</div>' + (s ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + s + '</div>' : '') + '</div>'; };
+  var h = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><div style="flex:1;min-width:240px"><h2 style="font-size:18px;font-weight:800">💧 Cascata de cobertura do mês</h2>' +
+    '<p style="font-size:12px;color:var(--muted);margin-top:3px">Cada real da base do mês paga as naturezas na ordem: impostos, fornecedores, pessoal, fixas, dívidas, eventuais, investimentos e reserva.</p></div>' +
+    '<label style="font-size:11px;color:var(--muted);font-weight:600">Mês <input type="month" value="' + c.mes + '" onchange="fin2_setMes(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)"></label>' +
+    '<label style="font-size:11px;color:var(--muted);font-weight:600">Base <select onchange="fin2_setParam(\'base\',this.value);renderCasPainel()" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)">' + ['Vencimento', 'Recebido', 'Faturado'].map(function(o) { return '<option' + (P.base === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select></label></div>';
+  if (!fin2_coll('fin2Receber').length && !fin2_coll('fin2Pessoas').length) h += '<div style="background:var(--orange-light);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12px">Sem dados ainda. Em <b>Parâmetros → Carga inicial</b> você carrega a planilha de out/2026, ou lance os cadastros manualmente.</div>';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">' +
+    kpi('Faturado no mês', fmt(c.fat), c.notas + ' nota(s) emitida(s)') + kpi('Recebido no mês (líquido)', fmt(c.recM)) +
+    kpi('A vencer no mês (líquido)', fmt(c.venc), 'já recebido ' + fmt(c.vencRec) + ' · a receber ' + fmt(c.aReceber)) +
+    kpi('Base usada (' + P.base + ')', fmt(c.baseGar), 'Garantido' + (c.prev.total > 0 ? ' · previsto +' + fmt(c.prev.total) : '')) + '</div>';
+  var tab = function(casc, titulo) {
+    var t = '<div style="font-size:13px;font-weight:800;margin:14px 0 6px">' + titulo + ' — base ' + fmt(casc.base) + '</div><div class="tbl-wrap" style="background:var(--panel);border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--muted);font-size:11px">' +
+      ['#', 'Natureza', 'Necessário', 'Disponível ao chegar', 'Coberto', '% coberto', 'Falta', 'Situação'].map(function(x, i) { return '<th style="padding:8px 8px;text-align:' + (i > 1 && i < 7 ? 'right' : 'left') + ';border-bottom:1px solid var(--border)">' + x + '</th>'; }).join('') + '</tr></thead><tbody>';
+    casc.rows.forEach(function(r, i) {
+      t += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">' + (i + 1) + '</td><td style="padding:8px"><b>' + r.nome + '</b>' + (r.desc ? '<div style="font-size:10.5px;color:var(--muted)">' + r.desc + '</div>' : '') + '</td>' +
+        '<td style="padding:8px;text-align:right;font-family:var(--mono)">' + fmt(r.nec) + '</td><td style="padding:8px;text-align:right;font-family:var(--mono)">' + fmt(r.disp) + '</td><td style="padding:8px;text-align:right;font-family:var(--mono)">' + fmt(r.cob) + '</td>' +
+        '<td style="padding:8px;text-align:right;min-width:110px">' + (r.pct == null ? '' : '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.round(r.pct * 100) + '%;background:' + cor[r.sit] + '"></div></div><span style="font-family:var(--mono)">' + Math.round(r.pct * 100) + '%</span></div>') + '</td>' +
+        '<td style="padding:8px;text-align:right;font-family:var(--mono);color:' + (r.falta > 0.005 ? 'var(--red)' : 'inherit') + '">' + fmt(r.falta) + '</td>' +
+        '<td style="padding:8px"><span style="background:' + corBg[r.sit] + ';color:' + cor[r.sit] + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">' + r.sit + '</span></td></tr>';
+    });
+    t += '</tbody><tfoot><tr style="font-weight:800"><td></td><td style="padding:8px">TOTAL</td><td style="padding:8px;text-align:right;font-family:var(--mono)">' + fmt(casc.totNec) + '</td><td></td><td style="padding:8px;text-align:right;font-family:var(--mono)">' + fmt(casc.totCob) + '</td><td style="padding:8px;text-align:right;font-family:var(--mono)">' + Math.round(casc.pct * 100) + '%</td><td style="padding:8px;text-align:right;font-family:var(--mono);color:var(--red)">' + fmt(casc.falta) + '</td><td></td></tr>' +
+      '<tr><td></td><td style="padding:6px 8px;color:var(--muted)">Sobra livre após todas as naturezas</td><td style="padding:6px 8px;text-align:right;font-family:var(--mono)">' + fmt(casc.sobra) + '</td><td colspan="5"></td></tr></tfoot></table></div>';
+    return t;
+  };
+  h += tab(c.gar, '🔒 Garantido (notas emitidas)');
+  if (c.prevCasc) h += tab(c.prevCasc, '🔮 Com previsão (OS ainda não faturadas)');
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:6px">Impostos: ' + (c.impFonte === 'guias' ? 'usando as guias lançadas' : 'usando estimativa sobre ' + (P.base === 'Vencimento' ? 'o faturamento de ' + fin2_mesNome(c.impComp) + ' (já sem o ISS retido)' : (P.base === 'Faturado' ? 'o faturamento do mês (bruta)' : 'o faturamento do mês (já sem o ISS retido)'))) + '.</div>';
+  var m = c.meta;
+  h += '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-top:16px"><div style="font-size:13px;font-weight:800;margin-bottom:8px">🎯 QUANTO PRECISO FATURAR NESTE MÊS</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">' +
+    kpi('Alíquota média de imposto do mês', (m.aliqMed * 100).toFixed(2).replace('.', ',') + '%') +
+    kpi('Faturamento para cobrir tudo (com reserva)', m.cobrirTudo == null ? '—' : fmt(m.cobrirTudo)) +
+    kpi('Ponto de equilíbrio (sem investimentos e reserva)', m.equilibrio == null ? '—' : fmt(m.equilibrio)) +
+    kpi('Falta entrar (base do mês) para o equilíbrio', m.falta == null ? '—' : fmt(m.falta)) + '</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-top:8px">Metas: pessoal, fixas, dívidas e eventuais pelo valor do mês; impostos e fornecedores como % do faturamento (alíquota média do mês e % da aba Parâmetros).</div></div>';
+  fin2_hostPrep('tab-cas-painel', h);
+}
+
+// ── Integração com o resto do app (mínima) ──────────────────────────────────
+// Ao ligar a Cascata: some o Financeiro antigo e a folha automática para de gerar.
+// Limpa as contas de salário/encargos geradas automaticamente e ainda não pagas.
+function fin2_limparFolhaAutoNaoPaga() {
+  var antes = (DB.contasPagar || []).length, rm = 0;
+  DB.contasPagar = (DB.contasPagar || []).filter(function(c) {
+    var auto = /^(folha-|encargos-)/.test(String(c.id || ''));
+    var pago = (parseFloat(c.pago) || 0) > 0 || c.status === 'Pago';
+    if (auto && !pago) { rm++; if (typeof registrarTombstone === 'function') registrarTombstone(c.id); return false; }
+    return true;
+  });
+  return rm;
+}
+
+const APP_BUILD_VERSION = '2026-10-08T15:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -18047,6 +18547,13 @@ function buildSavePayload() {
     requisicoes:         DB.requisicoes          || [],
     solicitacoesOrc:     DB.solicitacoesOrc      || [],
     solFamilias:         DB.solFamilias          || [],
+    fin2Receber: DB.fin2Receber || [],
+    fin2Pagar: DB.fin2Pagar || [],
+    fin2Guias: DB.fin2Guias || [],
+    fin2Dividas: DB.fin2Dividas || [],
+    fin2Fixas: DB.fin2Fixas || [],
+    fin2Pessoas: DB.fin2Pessoas || [],
+    fin2Param: DB.fin2Param || [],
     solPerguntas:        DB.solPerguntas         || [],
     autonomias:          DB.autonomias           || [],
     config:              DB.config               || {},
@@ -19081,7 +19588,8 @@ function aplicarModulosNaNav() {
   var perms = currentUser.perms || PERFIL_PERMS[currentUser.perfil] || PERFIL_PERMS.gerente;
   document.querySelectorAll('#main-tabs-bar .tab[data-group]').forEach(function(tab) {
     var grp = tab.dataset.group;
-    if (grp === 'fin') tab.style.display = (perms.fin && moduloAtivo('fin')) ? '' : 'none';
+    if (grp === 'fin') tab.style.display = (perms.fin && moduloAtivo('fin') && !moduloAtivo('cascata')) ? '' : 'none';
+    else if (grp === 'cas') tab.style.display = (perms.fin && moduloAtivo('cascata')) ? '' : 'none';
     else if (grp === 'alm') tab.style.display = (perms.alm && moduloAtivo('alm')) ? '' : 'none';
   });
 }
@@ -19324,7 +19832,8 @@ function applyPermissions(user) {
   document.querySelectorAll('#main-tabs-bar .tab[data-group]').forEach(tab => {
     const grp = tab.dataset.group;
     if (grp==='conf')    tab.style.display = showConf     ? '' : 'none';
-    else if (grp==='fin') tab.style.display = (perms.fin && moduloAtivo('fin'))   ? '' : 'none';
+    else if (grp==='fin') tab.style.display = (perms.fin && moduloAtivo('fin') && !moduloAtivo('cascata'))   ? '' : 'none';
+    else if (grp==='cas') tab.style.display = (perms.fin && moduloAtivo('cascata')) ? '' : 'none';
     else if (grp==='cad') tab.style.display = perms.cad   ? '' : 'none';
     else if (grp==='orc') tab.style.display = perms.orc   ? '' : 'none';
     else if (grp==='dash') tab.style.display = perms.dash!==false ? '' : 'none';
@@ -19823,6 +20332,7 @@ function corrigirDescricaoQuinzenaLegado() {
 }
 
 function gerarContasFolha() {
+  if (typeof moduloAtivo === 'function' && moduloAtivo('cascata')) return; // Cascata substitui a folha automática
   var hoje = new Date(); hoje.setHours(0,0,0,0);
 
   // TODOS os funcionários ativos geram conta de salário — a separação
@@ -31727,12 +32237,18 @@ function renderModulosCard() {
   card.style.display = (currentUser && currentUser.perfil === 'admin') ? '' : 'none';
   if (g('mod-fin')) g('mod-fin').checked = moduloAtivo('fin');
   if (g('mod-alm')) g('mod-alm').checked = moduloAtivo('alm');
+  if (g('mod-cas')) g('mod-cas').checked = moduloAtivo('cascata');
   if (g('mod-pc'))  g('mod-pc').checked  = moduloAtivo('pc');
 }
 function salvarModulos() {
   if (!currentUser || currentUser.perfil !== 'admin') { showToast('Só o administrador pode alterar os módulos.', 'warn'); return; }
   if (!DB.config) DB.config = {};
-  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked, pc: !!(g('mod-pc') && g('mod-pc').checked) };
+  var _casAntes = moduloAtivo('cascata');
+  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked, pc: !!(g('mod-pc') && g('mod-pc').checked), cascata: !!(g('mod-cas') && g('mod-cas').checked) };
+  if (!_casAntes && DB.config.modulos.cascata && typeof fin2_limparFolhaAutoNaoPaga === 'function') {
+    var _rm = fin2_limparFolhaAutoNaoPaga();
+    if (_rm) showToast('🧹 ' + _rm + ' conta(s) de salário/encargos automáticas e não pagas foram removidas do Financeiro antigo.', 'warn');
+  }
   DB.config._updatedAt = new Date().toISOString();
   saveAll(true);
   aplicarModulosNaNav();

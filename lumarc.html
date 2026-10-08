@@ -17578,37 +17578,6 @@ function fin2_hostPrep(tabId, inner) {
 }
 function fin2_mesFiltro(campo) { return function(r) { return !_fin2SoMes || fin2_ym(r[campo]) === fin2_mes() || (campo === 'venc' && !r.venc && fin2_ym(r.data) === fin2_mes()); }; }
 
-function renderCasReceber() {
-  fin2_hostPrep('tab-cas-receber', fin2_toolbar('cas-rec', '📥 Notas a receber', 'Uma linha por nota fiscal emitida. A cascata usa o vencimento (líquido = bruto − retenções).', { mes: true }) + '<div id="cas-rec-host"></div>');
-  var P = fin2_P();
-  fin2_grid('cas-rec', 'cas-rec-host', {
-    coll: 'fin2Receber', sort: 'venc', filter: function(r) { return !_fin2SoMes || fin2_ym(r.venc) === fin2_mes() || fin2_ym(r.em) === fin2_mes(); },
-    defaults: function() { return { em: new Date().toISOString().slice(0, 10), nf: '', cli: '', tipo: 'Serviço', bruto: 0, ret: 0, venc: null, rec: false, dtRec: null, obs: '' }; },
-    cols: [
-      { k: 'em', l: 'Emissão', t: 'date' }, { k: 'nf', l: 'Nº NF', t: 'text', w: 60 }, { k: 'cli', l: 'Cliente', t: 'text', w: 220 },
-      { k: 'tipo', l: 'Tipo', t: 'sel', opts: ['Serviço', 'Venda'] }, { k: 'bruto', l: 'Bruto', t: 'num' }, { k: 'ret', l: 'Retenções', t: 'num' },
-      { k: 'liq', l: 'Líquido', t: 'calc', f: function(r) { return fmt((+r.bruto || 0) - (+r.ret || 0)); } },
-      { k: 'venc', l: 'Vencimento', t: 'date' }, { k: 'rec', l: 'Recebida?', t: 'bool' }, { k: 'dtRec', l: 'Data receb.', t: 'date' }, { k: 'obs', l: 'Obs.', t: 'text', w: 200 }
-    ],
-    totals: { bruto: 1, ret: 1, liq: 'calc' }
-  });
-}
-function renderCasPagar() {
-  var ex = '<select onchange="_fin2FiltroNat=this.value;renderCasPagar()" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)"><option value="">Todas as naturezas</option>' +
-    FIN2_NATUREZAS.map(function(n) { return '<option value="' + n[0] + '"' + (_fin2FiltroNat === n[0] ? ' selected' : '') + '>' + n[1] + '</option>'; }).join('') + '</select>';
-  fin2_hostPrep('tab-cas-pagar', fin2_toolbar('cas-pag', '📤 Contas a pagar', 'Fornecedores, eventuais, investimentos e extras de pessoal. O mês é o do vencimento (ou da data, se não houver vencimento).', { mes: true, extra: ex }) + '<div id="cas-pag-host"></div>');
-  fin2_grid('cas-pag', 'cas-pag-host', {
-    coll: 'fin2Pagar', sort: 'venc',
-    filter: function(r) { return (!_fin2FiltroNat || r.natureza === _fin2FiltroNat) && (!_fin2SoMes || (fin2_ym(r.venc) || fin2_ym(r.data)) === fin2_mes()); },
-    defaults: function() { return { natureza: _fin2FiltroNat || 'fornecedor', data: new Date().toISOString().slice(0, 10), venc: null, forn: '', desc: '', ref: '', valor: 0, status: 'A pagar', dtPg: null, obs: '' }; },
-    cols: [
-      { k: 'natureza', l: 'Natureza', t: 'sel', opts: FIN2_NATUREZAS }, { k: 'data', l: 'Data', t: 'date' }, { k: 'venc', l: 'Vencimento', t: 'date' },
-      { k: 'forn', l: 'Fornecedor / credor', t: 'text', w: 160 }, { k: 'desc', l: 'Descrição', t: 'text', w: 240 }, { k: 'ref', l: 'NF/OS vinculada', t: 'text', w: 90 },
-      { k: 'valor', l: 'Valor', t: 'num' }, { k: 'status', l: 'Status', t: 'sel', opts: ['A pagar', 'Pago'] }, { k: 'dtPg', l: 'Data pgto.', t: 'date' }, { k: 'obs', l: 'Obs.', t: 'text', w: 180 }
-    ],
-    totals: { valor: 1 }
-  });
-}
 function renderCasGuias() {
   fin2_hostPrep('tab-cas-guias', fin2_toolbar('cas-gui', '🧾 Impostos — guias', 'Quando há guia com vencimento no mês, o Painel usa a soma delas no lugar da estimativa (' + Math.round(fin2_P().aliqServ * 100) + '% serviço / ' + Math.round(fin2_P().aliqVenda * 100) + '% venda).', { mes: true }) + '<div id="cas-gui-host"></div>');
   fin2_grid('cas-gui', 'cas-gui-host', {
@@ -17762,6 +17731,300 @@ function renderCasPainel() {
   fin2_hostPrep('tab-cas-painel', h);
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// FILTROS, IMPORTADOR DE XML E CONCILIADOR DE VALORES (A receber / A pagar)
+// ════════════════════════════════════════════════════════════════════════════
+var FIN2_CNPJ = '19179851000171';
+var _fin2F = {
+  rec: { per: 'mes', de: '', ate: '', sit: 'todas', q: '' },
+  pag: { per: 'mes', de: '', ate: '', sit: 'todas', q: '', nat: '' }
+};
+var FIN2_PERIODOS = [['todos', 'Todos os períodos'], ['mes', 'Mês selecionado'], ['hoje', 'Hoje'], ['p3', 'Próximos 3 dias'], ['p5', 'Próximos 5 dias'], ['p10', 'Próximos 10 dias'], ['p15', 'Próximos 15 dias'], ['p30', 'Próximos 30 dias'], ['custom', 'Definir período…']];
+function fin2_hojeIso() { var d = new Date(); return d.getFullYear() + '-' + fin2_pad(d.getMonth() + 1) + '-' + fin2_pad(d.getDate()); }
+function fin2_somaDias(iso, n) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + fin2_pad(d.getMonth() + 1) + '-' + fin2_pad(d.getDate()); }
+function fin2_br(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : ''; }
+function fin2_norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function fin2_aberto(kind, r) { return kind === 'rec' ? !r.rec : r.status !== 'Pago'; }
+function fin2_dataRef(kind, r) { return r.venc || (kind === 'pag' ? r.data : r.em) || ''; }
+function fin2_passaFiltro(kind, r) {
+  var f = _fin2F[kind], ref = fin2_dataRef(kind, r), hoje = fin2_hojeIso();
+  if (kind === 'pag' && f.nat && r.natureza !== f.nat) return false;
+  var ab = fin2_aberto(kind, r);
+  if (f.sit === 'abertas' && !ab) return false;
+  if (f.sit === 'quitadas' && ab) return false;
+  if (f.sit === 'vencidas' && !(ab && ref && ref < hoje)) return false;
+  if (f.sit === 'avencer' && !(ab && ref && ref >= hoje)) return false;
+  if (f.per === 'mes' && fin2_ym(ref) !== fin2_mes()) return false;
+  var m = /^p(\d+)$/.exec(f.per);
+  if (m && !(ref >= hoje && ref <= fin2_somaDias(hoje, +m[1]))) return false;
+  if (f.per === 'hoje' && ref !== hoje) return false;
+  if (f.per === 'custom') { if (f.de && ref < f.de) return false; if (f.ate && ref > f.ate) return false; }
+  if (f.q) {
+    var txt = fin2_norm([r.nf, r.cli, r.forn, r.desc, r.ref, r.obs].join(' '));
+    if (f.q.split(/\s+/).some(function(t) { return t && txt.indexOf(fin2_norm(t)) < 0; })) return false;
+  }
+  return true;
+}
+function fin2_fSet(kind, k, v, soGrade) {
+  _fin2F[kind][k] = v;
+  if (soGrade) { fin2_gridRender(kind === 'rec' ? 'cas-rec' : 'cas-pag'); fin2_resumoFiltro(kind); } else (kind === 'rec' ? renderCasReceber : renderCasPagar)();
+}
+function fin2_resumoFiltro(kind) {
+  var el = g('f2-resumo-' + kind); if (!el) return;
+  var rows = fin2_gridRows(kind === 'rec' ? 'cas-rec' : 'cas-pag'), hoje = fin2_hojeIso();
+  var val = function(r) { return kind === 'rec' ? (+r.bruto || 0) - (+r.ret || 0) : (+r.valor || 0); };
+  var sum = function(a) { return a.reduce(function(s, r) { return s + val(r); }, 0); };
+  var ab = rows.filter(function(r) { return fin2_aberto(kind, r); }), q = rows.filter(function(r) { return !fin2_aberto(kind, r); });
+  var venc = ab.filter(function(r) { var d = fin2_dataRef(kind, r); return d && d < hoje; });
+  el.innerHTML = '<b>' + rows.length + '</b> lançamento(s) · em aberto <b>' + fmt(sum(ab)) + '</b> · ' + (kind === 'rec' ? 'recebidos' : 'pagos') + ' <b>' + fmt(sum(q)) + '</b> · vencidos <b style="color:var(--red)">' + fmt(sum(venc)) + '</b> (' + venc.length + ')';
+}
+function fin2_filtroBar(kind) {
+  var f = _fin2F[kind], gid = kind === 'rec' ? 'cas-rec' : 'cas-pag';
+  var st = 'border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text);font-size:12px;width:auto';
+  var sel = function(k, opts) { return '<select onchange="fin2_fSet(\'' + kind + '\',\'' + k + '\',this.value)" style="' + st + '">' + opts.map(function(o) { return '<option value="' + o[0] + '"' + (f[k] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; };
+  var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px">' +
+    '<input type="search" placeholder="🔍 Buscar ' + (kind === 'rec' ? 'cliente, nº NF…' : 'fornecedor, descrição, NF…') + '" value="' + fin2_esc(f.q) + '" oninput="fin2_fSet(\'' + kind + '\',\'q\',this.value,true)" style="' + st + ';min-width:240px;flex:1">' +
+    sel('per', FIN2_PERIODOS);
+  if (f.per === 'mes') h += '<input type="month" value="' + fin2_mes() + '" onchange="fin2_setMes(this.value)" style="' + st + '">';
+  if (f.per === 'custom') h += '<input type="date" value="' + f.de + '" onchange="fin2_fSet(\'' + kind + '\',\'de\',this.value)" style="' + st + '"> até <input type="date" value="' + f.ate + '" onchange="fin2_fSet(\'' + kind + '\',\'ate\',this.value)" style="' + st + '">';
+  h += sel('sit', [['todas', 'Todas'], ['abertas', kind === 'rec' ? 'A receber (em aberto)' : 'A pagar (em aberto)'], ['quitadas', kind === 'rec' ? 'Recebidas' : 'Pagas'], ['vencidas', 'Vencidas'], ['avencer', 'A vencer']]);
+  if (kind === 'pag') h += sel('nat', [['', 'Todas as naturezas']].concat(FIN2_NATUREZAS));
+  h += '</div><div id="f2-resumo-' + kind + '" style="font-size:12px;color:var(--muted);margin:0 2px 8px"></div>';
+  return h;
+}
+function fin2_acoesBar(kind) {
+  var b = 'class="btn btn-ghost btn-sm"';
+  return '<label ' + b + ' style="cursor:pointer">📄 Importar XML<input type="file" accept=".xml,text/xml" multiple style="display:none" onchange="fin2_importarXml(this,\'' + kind + '\')"></label>' +
+    '<button ' + b + ' onclick="fin2_abrirConciliador(\'' + kind + '\')">🧮 Conciliar valor</button>';
+}
+
+function renderCasReceber() {
+  fin2_hostPrep('tab-cas-receber', fin2_toolbar('cas-rec', '📥 Notas a receber', 'Uma linha por nota/parcela (líquido = bruto − retenções). Importe XML de NF-e/NFS-e emitidas ou use “Conciliar valor” quando o cliente paga várias notas juntas.', { extra: fin2_acoesBar('rec') }) + fin2_filtroBar('rec') + '<div id="cas-rec-host"></div>');
+  fin2_grid('cas-rec', 'cas-rec-host', {
+    coll: 'fin2Receber', sort: 'venc', filter: function(r) { return fin2_passaFiltro('rec', r); },
+    defaults: function() { return { em: fin2_hojeIso(), nf: '', cli: '', tipo: 'Serviço', bruto: 0, ret: 0, venc: null, rec: false, dtRec: null, obs: '' }; },
+    cols: [
+      { k: 'em', l: 'Emissão', t: 'date' }, { k: 'nf', l: 'Nº NF', t: 'text', w: 60 }, { k: 'cli', l: 'Cliente', t: 'text', w: 220 },
+      { k: 'tipo', l: 'Tipo', t: 'sel', opts: ['Serviço', 'Venda'] }, { k: 'bruto', l: 'Bruto', t: 'num' }, { k: 'ret', l: 'Retenções', t: 'num' },
+      { k: 'liq', l: 'Líquido', t: 'calc', f: function(r) { return fmt((+r.bruto || 0) - (+r.ret || 0)); } },
+      { k: 'venc', l: 'Vencimento', t: 'date' }, { k: 'rec', l: 'Recebida?', t: 'bool' }, { k: 'dtRec', l: 'Data receb.', t: 'date' },
+      { k: 'sit', l: 'Situação', t: 'calc', f: function(r) { return r.rec ? 'Recebida' : (r.venc && r.venc < fin2_hojeIso() ? 'VENCIDA' : 'A vencer'); } },
+      { k: 'obs', l: 'Obs.', t: 'text', w: 200 }
+    ],
+    totals: { bruto: 1, ret: 1, liq: 'calc' }, after: function() { fin2_resumoFiltro('rec'); }
+  });
+  fin2_resumoFiltro('rec');
+}
+function renderCasPagar() {
+  fin2_hostPrep('tab-cas-pagar', fin2_toolbar('cas-pag', '📤 Contas a pagar', 'Fornecedores, eventuais, investimentos e extras de pessoal. O mês é o do vencimento (ou da data, se não houver vencimento). Importe XML de NF-e de compra (destinada à Lumarc).', { extra: fin2_acoesBar('pag') }) + fin2_filtroBar('pag') + '<div id="cas-pag-host"></div>');
+  fin2_grid('cas-pag', 'cas-pag-host', {
+    coll: 'fin2Pagar', sort: 'venc', filter: function(r) { return fin2_passaFiltro('pag', r); },
+    defaults: function() { return { natureza: _fin2F.pag.nat || 'fornecedor', data: fin2_hojeIso(), venc: null, forn: '', desc: '', ref: '', valor: 0, status: 'A pagar', dtPg: null, obs: '' }; },
+    cols: [
+      { k: 'natureza', l: 'Natureza', t: 'sel', opts: FIN2_NATUREZAS }, { k: 'data', l: 'Data', t: 'date' }, { k: 'venc', l: 'Vencimento', t: 'date' },
+      { k: 'forn', l: 'Fornecedor / credor', t: 'text', w: 160 }, { k: 'desc', l: 'Descrição', t: 'text', w: 240 }, { k: 'ref', l: 'NF/OS vinculada', t: 'text', w: 90 },
+      { k: 'valor', l: 'Valor', t: 'num' }, { k: 'status', l: 'Status', t: 'sel', opts: ['A pagar', 'Pago'] }, { k: 'dtPg', l: 'Data pgto.', t: 'date' },
+      { k: 'sit', l: 'Situação', t: 'calc', f: function(r) { var d = fin2_dataRef('pag', r); return r.status === 'Pago' ? 'Paga' : (d && d < fin2_hojeIso() ? 'VENCIDA' : 'A vencer'); } },
+      { k: 'obs', l: 'Obs.', t: 'text', w: 180 }
+    ],
+    totals: { valor: 1 }, after: function() { fin2_resumoFiltro('pag'); }
+  });
+  fin2_resumoFiltro('pag');
+}
+
+// ── Modal simples próprio (não depende dos modais existentes) ───────────────
+function fin2_modal(titulo, corpo, largura) {
+  fin2_fecharModal();
+  var d = document.createElement('div'); d.id = 'f2-modal';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+  d.innerHTML = '<div style="background:var(--panel);border-radius:12px;width:' + (largura || 900) + 'px;max-width:100%;box-shadow:var(--shadow-md)"><div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)"><div style="font-weight:800;font-size:14px;flex:1">' + titulo + '</div><button class="btn btn-ghost btn-sm" onclick="fin2_fecharModal()">✕</button></div><div id="f2-modal-body" style="padding:16px 18px">' + corpo + '</div></div>';
+  document.body.appendChild(d);
+}
+function fin2_fecharModal() { var m = document.getElementById('f2-modal'); if (m) m.remove(); }
+
+// ── Importador de XML ───────────────────────────────────────────────────────
+var _fin2Imp = { kind: '', itens: [] };
+function fin2_txt(el, tag) { var n = el && el.getElementsByTagName(tag)[0]; return n ? (n.textContent || '').trim() : ''; }
+function fin2_isoData(s) { return s ? String(s).slice(0, 10) : null; }
+function fin2_parseXml(txt, arq) {
+  var doc = new DOMParser().parseFromString(txt, 'text/xml');
+  if (doc.getElementsByTagName('parsererror').length) return [{ ign: 'XML inválido', arq: arq }];
+  var inf = doc.getElementsByTagName('infNFe')[0];
+  if (inf) return fin2_parseNFe(doc, inf, arq);
+  if (doc.getElementsByTagName('InfNfse')[0] || doc.getElementsByTagName('Nfse')[0] || doc.getElementsByTagName('InfDeclaracaoPrestacaoServico')[0]) return fin2_parseNFSe(doc, arq);
+  if (doc.getElementsByTagName('infEvento')[0]) return [{ ign: 'Evento (cancelamento/CC-e), não é nota', arq: arq }];
+  return [{ ign: 'Formato não reconhecido', arq: arq }];
+}
+function fin2_parseNFe(doc, inf, arq) {
+  var emit = inf.getElementsByTagName('emit')[0], dest = inf.getElementsByTagName('dest')[0];
+  var eCnpj = fin2_txt(emit, 'CNPJ'), dCnpj = fin2_txt(dest, 'CNPJ') || fin2_txt(dest, 'CPF');
+  var ide = inf.getElementsByTagName('ide')[0];
+  var nNF = fin2_txt(ide, 'nNF'), emissao = fin2_isoData(fin2_txt(ide, 'dhEmi') || fin2_txt(ide, 'dEmi'));
+  var chave = (inf.getAttribute('Id') || '').replace('NFe', '') || fin2_txt(doc, 'chNFe');
+  var vNF = parseFloat(fin2_txt(inf.getElementsByTagName('ICMSTot')[0], 'vNF')) || parseFloat(fin2_txt(inf, 'vNF')) || 0;
+  var cfop = fin2_txt(inf.getElementsByTagName('det')[0], 'CFOP');
+  var dups = Array.prototype.slice.call(inf.getElementsByTagName('dup')).map(function(d) { return { n: fin2_txt(d, 'nDup'), venc: fin2_isoData(fin2_txt(d, 'dVenc')), v: parseFloat(fin2_txt(d, 'vDup')) || 0 }; });
+  var tPag = fin2_txt(inf.getElementsByTagName('detPag')[0], 'tPag');
+  var out = [];
+  if (eCnpj === FIN2_CNPJ) { // emitida pela Lumarc → a receber
+    if (/^[56]9\d\d$/.test(cfop) || cfop === '5551' || cfop === '6551') return [{ ign: 'CFOP ' + cfop + ' (remessa/retorno/ativo) — sem cobrança', arq: arq, nf: nNF }];
+    var cli = fin2_txt(dest, 'xNome'), tipo = /^[56]12[45]$/.test(cfop) ? 'Serviço' : 'Venda';
+    if (!dups.length) dups = [{ n: '', venc: null, v: vNF }];
+    dups.forEach(function(d, i) {
+      out.push({ kind: 'rec', arq: arq, chave: chave, k: 'nfe-' + chave + '-' + (i + 1), est: !d.venc,
+        rec: { em: emissao, nf: nNF, cli: cli, tipo: tipo, bruto: d.v, ret: 0, venc: d.venc || (emissao ? fin2_somaDias(emissao, 30) : null), rec: false, dtRec: null, obs: 'NF-e ' + nNF + (dups.length > 1 ? ' — parcela ' + (i + 1) + '/' + dups.length : '') + ' (importada de XML)' } });
+    });
+    return out;
+  }
+  if (dCnpj === FIN2_CNPJ) { // destinada à Lumarc → a pagar
+    var forn = fin2_txt(emit, 'xNome');
+    var desc = Array.prototype.slice.call(inf.getElementsByTagName('xProd')).slice(0, 4).map(function(n) { return n.textContent.trim(); }).join('; ');
+    var avista = /^(01|03|04|17|20)$/.test(tPag);
+    if (!dups.length) dups = [{ n: '', venc: avista ? emissao : null, v: vNF }];
+    dups.forEach(function(d, i) {
+      out.push({ kind: 'pag', arq: arq, chave: chave, k: 'nfe-' + chave + '-' + (i + 1), est: !d.venc,
+        rec: { natureza: 'fornecedor', data: emissao, venc: d.venc || (emissao ? fin2_somaDias(emissao, 30) : null), forn: forn, desc: desc.slice(0, 160), ref: 'NF ' + nNF, valor: d.v, status: avista ? 'Pago' : 'A pagar', dtPg: avista ? emissao : null,
+          obs: 'NF-e ' + nNF + (dups.length > 1 ? ' — parcela ' + (i + 1) + '/' + dups.length : (avista ? ' — à vista' : '')) + ' (importada de XML)' } });
+    });
+    return out;
+  }
+  return [{ ign: 'Nota não é emitida nem destinada à Lumarc (CNPJ)', arq: arq, nf: nNF }];
+}
+function fin2_parseNFSe(doc, arq) {
+  var inf = doc.getElementsByTagName('InfNfse')[0] || doc.getElementsByTagName('Nfse')[0] || doc;
+  var prest = inf.getElementsByTagName('PrestadorServico')[0] || inf.getElementsByTagName('Prestador')[0];
+  var pCnpj = prest ? (fin2_txt(prest, 'Cnpj') || fin2_txt(prest, 'CNPJ')) : '';
+  var tom = inf.getElementsByTagName('TomadorServico')[0] || inf.getElementsByTagName('Tomador')[0];
+  var num = fin2_txt(inf, 'Numero'), emissao = fin2_isoData(fin2_txt(inf, 'DataEmissao'));
+  var bruto = parseFloat(fin2_txt(inf, 'ValorServicos')) || 0;
+  var issRet = fin2_txt(inf, 'IssRetido') === '1';
+  var ret = (issRet ? (parseFloat(fin2_txt(inf, 'ValorIss')) || parseFloat(fin2_txt(inf, 'ValorIssRetido')) || 0) : 0);
+  ['ValorPis', 'ValorCofins', 'ValorCsll', 'ValorIr', 'ValorInss'].forEach(function(t) { ret += parseFloat(fin2_txt(inf, t)) || 0; });
+  if (pCnpj && pCnpj !== FIN2_CNPJ) return [{ ign: 'NFS-e de outro prestador', arq: arq, nf: num }];
+  return [{ kind: 'rec', arq: arq, chave: '', k: 'nfse-' + num, est: true,
+    rec: { em: emissao, nf: num, cli: tom ? (fin2_txt(tom, 'RazaoSocial') || fin2_txt(tom, 'NomeFantasia')) : '', tipo: 'Serviço', bruto: bruto, ret: fin2_r2(ret), venc: emissao ? fin2_somaDias(emissao, 30) : null, rec: false, dtRec: null, obs: 'NFS-e ' + num + ' (importada de XML) — confira retenções e vencimento' } }];
+}
+function fin2_dupExiste(it) {
+  var a = fin2_coll(it.kind === 'rec' ? 'fin2Receber' : 'fin2Pagar');
+  if (a.some(function(x) { return x._k === it.k; })) return true;
+  var r = it.rec, nfn = String(r.nf || (r.ref || '').replace(/\D/g, '')).replace(/\D/g, ''), nome = fin2_norm(it.kind === 'rec' ? r.cli : r.forn).slice(0, 8);
+  var val = it.kind === 'rec' ? fin2_r2(r.bruto) : fin2_r2(r.valor);
+  return a.some(function(x) {
+    var xn = String(it.kind === 'rec' ? x.nf : (x.ref || '')).replace(/\D/g, '');
+    var xv = it.kind === 'rec' ? fin2_r2(x.bruto) : fin2_r2(x.valor);
+    return nfn && xn === nfn && fin2_norm(it.kind === 'rec' ? x.cli : x.forn).slice(0, 8) === nome && xv === val;
+  });
+}
+function fin2_importarXml(inp, kind) {
+  var files = Array.prototype.slice.call(inp.files || []); inp.value = '';
+  if (!files.length) return;
+  var res = [], pend = files.length;
+  files.forEach(function(f) {
+    var fr = new FileReader();
+    fr.onload = function(e) { try { res = res.concat(fin2_parseXml(String(e.target.result), f.name)); } catch (er) { res.push({ ign: 'Erro ao ler: ' + er.message, arq: f.name }); } if (--pend === 0) fin2_previaImport(kind, res); };
+    fr.onerror = function() { res.push({ ign: 'Falha ao abrir arquivo', arq: f.name }); if (--pend === 0) fin2_previaImport(kind, res); };
+    fr.readAsText(f);
+  });
+}
+function fin2_previaImport(kind, res) {
+  var itens = res.filter(function(x) { return x.kind; }), ign = res.filter(function(x) { return !x.kind; });
+  var outro = itens.filter(function(x) { return x.kind !== kind; });
+  itens = itens.filter(function(x) { return x.kind === kind; });
+  outro.forEach(function(x) { ign.push({ ign: 'É nota de ' + (x.kind === 'rec' ? 'venda (use a aba A receber)' : 'compra (use a aba A pagar)'), arq: x.arq, nf: x.rec.nf }); });
+  itens.forEach(function(x) { x.dup = fin2_dupExiste(x); x.sel = !x.dup; });
+  _fin2Imp = { kind: kind, itens: itens };
+  var h = '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Confira antes de importar. Linhas “duplicada” já existem e vêm desmarcadas. Vencimentos em <span style="background:var(--orange-light);padding:0 4px;border-radius:3px">laranja</span> foram estimados (emissão + 30 dias) — ajuste se precisar.</div>';
+  if (itens.length) {
+    h += '<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--muted);font-size:11px"><th></th><th style="text-align:left">NF</th><th style="text-align:left">' + (kind === 'rec' ? 'Cliente' : 'Fornecedor') + '</th><th style="text-align:right">Valor</th>' + (kind === 'rec' ? '<th style="text-align:right">Retenções</th>' : '') + '<th>Vencimento</th><th style="text-align:left">Situação</th></tr></thead><tbody>';
+    itens.forEach(function(x, i) {
+      var r = x.rec;
+      h += '<tr style="border-top:1px solid var(--border)"><td><input type="checkbox" ' + (x.sel ? 'checked' : '') + ' onchange="_fin2Imp.itens[' + i + '].sel=this.checked" style="width:auto"></td><td>' + fin2_esc(r.nf || r.ref) + '</td><td>' + fin2_esc(kind === 'rec' ? r.cli : r.forn) + '</td><td style="text-align:right;font-family:var(--mono)">' + fmt(kind === 'rec' ? r.bruto : r.valor) + '</td>' +
+        (kind === 'rec' ? '<td style="text-align:right;font-family:var(--mono)">' + fmt(r.ret) + '</td>' : '') +
+        '<td><input type="date" value="' + (r.venc || '') + '" onchange="_fin2Imp.itens[' + i + '].rec.venc=this.value" style="width:auto;padding:2px 4px;' + (x.est ? 'background:var(--orange-light)' : '') + '"></td><td>' + (x.dup ? '<span style="color:var(--red)">duplicada</span>' : (r.status === 'Pago' ? 'nova (já paga)' : 'nova')) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  } else h += '<div style="padding:16px;text-align:center;color:var(--muted)">Nenhuma nota importável nos arquivos enviados.</div>';
+  if (ign.length) h += '<details style="margin-top:12px;font-size:12px"><summary style="cursor:pointer;color:var(--muted)">' + ign.length + ' arquivo(s)/nota(s) ignorado(s)</summary><ul style="margin:6px 0 0 18px">' + ign.map(function(x) { return '<li>' + fin2_esc(x.arq) + (x.nf ? ' (NF ' + fin2_esc(x.nf) + ')' : '') + ' — ' + fin2_esc(x.ign) + '</li>'; }).join('') + '</ul></details>';
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-ghost" onclick="fin2_fecharModal()">Cancelar</button>' + (itens.length ? '<button class="btn btn-primary" onclick="fin2_confirmarImport()">Importar selecionadas</button>' : '') + '</div>';
+  fin2_modal('📄 Importar XML — ' + (kind === 'rec' ? 'notas a receber' : 'contas a pagar'), h, 900);
+}
+function fin2_confirmarImport() {
+  var kind = _fin2Imp.kind, a = fin2_coll(kind === 'rec' ? 'fin2Receber' : 'fin2Pagar'), n = 0, ts = new Date().toISOString();
+  _fin2Imp.itens.forEach(function(x) { if (!x.sel) return; a.push(Object.assign({ id: fin2_novoId(), _k: x.k, _updatedAt: ts }, x.rec)); n++; });
+  if (n) saveAll(true);
+  fin2_fecharModal();
+  showToast('✅ ' + n + ' lançamento(s) importado(s).');
+  (kind === 'rec' ? renderCasReceber : renderCasPagar)();
+}
+
+// ── Conciliador de valores (cliente paga várias notas juntas) ───────────────
+var _fin2Conc = { kind: '', combos: [], cands: [] };
+function fin2_abrirConciliador(kind) {
+  var rec = kind === 'rec';
+  var st = 'border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--panel);color:var(--text);font-size:12px;width:auto';
+  var h = '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Informe o valor ' + (rec ? 'que caiu no banco' : 'debitado') + ' e o sistema procura quais lançamentos em aberto somam exatamente esse valor. O filtro de busca da tela (cliente/fornecedor) restringe os candidatos — use-o para reduzir as combinações.</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">' +
+    '<label style="font-size:11px;font-weight:600">Valor<br><input id="f2c-valor" type="text" inputmode="decimal" placeholder="0,00" style="' + st + ';font-family:var(--mono)" onkeydown="if(event.key===\'Enter\')fin2_buscarCombo()"></label>' +
+    '<label style="font-size:11px;font-weight:600">Cliente/fornecedor (opcional)<br><input id="f2c-q" type="text" value="' + fin2_esc(_fin2F[kind].q) + '" style="' + st + ';min-width:180px" onkeydown="if(event.key===\'Enter\')fin2_buscarCombo()"></label>' +
+    '<label style="font-size:11px;font-weight:600">Vencimento até<br><select id="f2c-jan" style="' + st + '"><option value="0">Qualquer data</option><option value="15">±15 dias de hoje</option><option value="30" selected>±30 dias de hoje</option><option value="60">±60 dias de hoje</option><option value="90">±90 dias de hoje</option></select></label>' +
+    '<label style="font-size:11px;font-weight:600">Data da baixa<br><input id="f2c-data" type="date" value="' + fin2_hojeIso() + '" style="' + st + '"></label>' +
+    '<button class="btn btn-primary btn-sm" onclick="fin2_buscarCombo()">Buscar combinações</button></div><div id="f2c-res"></div>';
+  _fin2Conc = { kind: kind, combos: [], cands: [] };
+  fin2_modal('🧮 Conciliar valor — ' + (rec ? 'recebimento' : 'pagamento'), h, 820);
+  setTimeout(function() { var i = g('f2c-valor'); if (i) i.focus(); }, 50);
+}
+function fin2_buscarCombo() {
+  var kind = _fin2Conc.kind, res = g('f2c-res'), alvo = Math.round(fin2_num(g('f2c-valor').value) * 100);
+  if (alvo <= 0) { res.innerHTML = '<div style="color:var(--muted)">Informe um valor.</div>'; return; }
+  var q = fin2_norm(g('f2c-q').value).split(/\s+/).filter(Boolean), jan = parseInt(g('f2c-jan').value) || 0, hoje = fin2_hojeIso();
+  var lo = fin2_somaDias(hoje, -jan), hi = fin2_somaDias(hoje, jan);
+  var val = function(r) { return Math.round((kind === 'rec' ? (+r.bruto || 0) - (+r.ret || 0) : (+r.valor || 0)) * 100); };
+  var cands = fin2_coll(kind === 'rec' ? 'fin2Receber' : 'fin2Pagar').filter(function(r) {
+    if (!fin2_aberto(kind, r) || val(r) <= 0 || val(r) > alvo) return false;
+    var ref = fin2_dataRef(kind, r);
+    if (jan && ref && (ref < lo || ref > hi)) return false;
+    var txt = fin2_norm([r.nf, r.cli, r.forn, r.desc, r.ref].join(' '));
+    return q.every(function(t) { return txt.indexOf(t) >= 0; });
+  });
+  var aviso = '';
+  if (cands.length > 40) { cands.sort(function(a, b) { return Math.abs(new Date((fin2_dataRef(kind, a) || hoje) + 'T12:00:00') - new Date(hoje + 'T12:00:00')) - Math.abs(new Date((fin2_dataRef(kind, b) || hoje) + 'T12:00:00') - new Date(hoje + 'T12:00:00')); }); cands = cands.slice(0, 40); aviso = '<div style="font-size:11px;color:var(--orange);margin-bottom:6px">Muitos candidatos: usando os 40 com vencimento mais próximo de hoje. Informe o cliente/fornecedor para refinar.</div>'; }
+  if (!cands.length) { res.innerHTML = '<div style="color:var(--muted);padding:8px 0">Nenhum lançamento em aberto nesse critério.</div>'; return; }
+  var vals = cands.map(val), exatas = [], melhor = Infinity, melhores = [], cont = 0, LIM = 300000;
+  (function busca(ini, soma, set) {
+    if (cont > LIM) return;
+    var d = Math.abs(soma - alvo);
+    if (set.length && d < melhor) { melhor = d; melhores = [set.slice()]; } else if (set.length && d === melhor && melhores.length < 5) melhores.push(set.slice());
+    if (soma === alvo && set.length) { if (exatas.length < 20) exatas.push(set.slice()); return; }
+    if (soma > alvo) return;
+    for (var i = ini; i < vals.length; i++) { cont++; set.push(i); busca(i + 1, soma + vals[i], set); set.pop(); if (cont > LIM) return; }
+  })(0, 0, []);
+  var combos = exatas.length ? exatas : melhores, exato = exatas.length > 0;
+  _fin2Conc.cands = cands; _fin2Conc.combos = combos;
+  var h = aviso + (exato ? '<div style="background:var(--green-light);color:var(--green);padding:6px 10px;border-radius:8px;font-weight:700;font-size:12px;margin-bottom:8px">✅ ' + exatas.length + ' combinação(ões) exata(s)' + (cont > LIM ? ' (busca limitada)' : '') + '</div>'
+    : '<div style="background:var(--orange-light);padding:6px 10px;border-radius:8px;font-size:12px;margin-bottom:8px">Nenhuma combinação exata. Mais próxima: diferença de <b>' + fmt(melhor / 100) + '</b>' + (cont > LIM ? ' (busca limitada)' : '') + '</div>');
+  combos.slice(0, 6).forEach(function(c, ci) {
+    var tot = c.reduce(function(s, i) { return s + vals[i]; }, 0);
+    h += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">Opção ' + (ci + 1) + ' — ' + c.length + ' lançamento(s) = ' + fmt(tot / 100) + '</div>';
+    c.forEach(function(i) { var r = cands[i]; h += '<div style="font-size:12px;display:flex;gap:10px"><span style="min-width:70px">' + fin2_esc(r.nf || r.ref || '') + '</span><span style="flex:1">' + fin2_esc(kind === 'rec' ? r.cli : r.forn) + '</span><span style="color:var(--muted)">venc. ' + fin2_br(fin2_dataRef(kind, r)) + '</span><span style="font-family:var(--mono);min-width:90px;text-align:right">' + fmt(vals[i] / 100) + '</span></div>'; });
+    h += '<div style="text-align:right;margin-top:6px"><button class="btn btn-green btn-sm" onclick="fin2_baixarCombo(' + ci + ')">' + (kind === 'rec' ? '✅ Marcar como recebidas' : '✅ Marcar como pagas') + '</button></div></div>';
+  });
+  if (combos.length > 6) h += '<div style="font-size:11px;color:var(--muted);text-align:center">… e mais ' + (combos.length - 6) + ' opção(ões). Refine o filtro.</div>';
+  res.innerHTML = h;
+}
+function fin2_baixarCombo(ci) {
+  var kind = _fin2Conc.kind, c = _fin2Conc.combos[ci]; if (!c) return;
+  var data = (g('f2c-data') && g('f2c-data').value) || fin2_hojeIso(), ts = new Date().toISOString();
+  c.forEach(function(i) {
+    var r = _fin2Conc.cands[i];
+    if (kind === 'rec') { r.rec = true; r.dtRec = data; } else { r.status = 'Pago'; r.dtPg = data; }
+    r._updatedAt = ts;
+  });
+  saveAll(true); fin2_fecharModal();
+  showToast('✅ ' + c.length + ' lançamento(s) baixado(s) em ' + fin2_br(data) + '.');
+  (kind === 'rec' ? renderCasReceber : renderCasPagar)();
+}
+
 // ── Integração com o resto do app (mínima) ──────────────────────────────────
 // Ao ligar a Cascata: some o Financeiro antigo e a folha automática para de gerar.
 // Limpa as contas de salário/encargos geradas automaticamente e ainda não pagas.
@@ -17776,7 +18039,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-10-08T16:10:00Z';
+const APP_BUILD_VERSION = '2026-10-08T17:30:00Z';
 
 async function verificarVersaoAtualizada() {
   try {

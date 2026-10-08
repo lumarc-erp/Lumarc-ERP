@@ -17504,12 +17504,13 @@ function fin2_gridRows(gid) {
 function fin2_gridRender(gid) {
   var cfg = FIN2_GRIDS[gid], host = g(cfg.hostId); if (!host) return;
   var rows = fin2_gridRows(gid);
-  var h = '<div class="tbl-wrap" style="background:var(--panel);border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>';
+  var h = '<div class="tbl-wrap" style="background:var(--panel);border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>' + (cfg.rowFmt ? '<th style="width:10px;padding:0"></th>' : '');
   cfg.cols.forEach(function(c) { h += '<th style="text-align:' + (c.t === 'num' || c.t === 'calc' ? 'right' : 'left') + ';padding:8px 6px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">' + c.l + '</th>'; });
   h += '<th></th></tr></thead><tbody>';
-  if (!rows.length) h += '<tr><td colspan="' + (cfg.cols.length + 1) + '" style="padding:24px;text-align:center;color:var(--muted)">Nenhum registro. Use “+ Adicionar”.</td></tr>';
+  if (!rows.length) h += '<tr><td colspan="' + (cfg.cols.length + 2) + '" style="padding:24px;text-align:center;color:var(--muted)">Nenhum registro. Use “+ Adicionar”.</td></tr>';
   rows.forEach(function(r) {
-    h += '<tr style="border-bottom:1px solid var(--border)">';
+    var rf = cfg.rowFmt ? cfg.rowFmt(r) : null;
+    h += '<tr style="border-bottom:1px solid var(--border)' + (rf ? ';background:' + rf.bg : '') + '">' + (rf ? '<td title="' + fin2_esc(rf.txt) + '" style="width:10px;padding:0"><div style="width:8px;height:32px;background:' + rf.bar + '"></div></td>' : '');
     cfg.cols.forEach(function(c) { h += '<td style="padding:4px 6px;text-align:' + (c.t === 'calc' ? 'right' : 'left') + '">' + fin2_cellHtml(gid, r, c) + '</td>'; });
     h += '<td style="padding:4px"><button class="btn btn-ghost btn-xs" title="Excluir" onclick="fin2_del(\'' + gid + '\',\'' + r.id + '\')">✕</button></td></tr>';
   });
@@ -17519,7 +17520,7 @@ function fin2_gridRender(gid) {
 }
 function fin2_gridTotals(gid) {
   var cfg = FIN2_GRIDS[gid], el = g('f2tot-' + gid); if (!el || !cfg.totals) return;
-  var rows = fin2_gridRows(gid), h = '';
+  var rows = fin2_gridRows(gid), h = cfg.rowFmt ? '<td></td>' : '';
   cfg.cols.forEach(function(c, i) {
     var t = cfg.totals[c.k];
     var val = t ? rows.reduce(function(s, r) { return s + (t === 'calc' ? fin2_num(c.f(r)) : (+r[c.k] || 0)); }, 0) : null;
@@ -17542,6 +17543,7 @@ function fin2_onChange(el) {
     var c = cfg.cols.filter(function(x) { return x.k === sp.dataset.k; })[0]; if (c) sp.textContent = c.f(rec);
   });
   fin2_gridTotals(gid);
+  if (cfg.rowFmt && (t === 'bool' || t === 'date' || k === 'status')) { fin2_gridRender(gid); }
   if (cfg.after) cfg.after();
 }
 function fin2_add(gid) {
@@ -17799,10 +17801,30 @@ function fin2_acoesBar(kind) {
     '<button ' + b + ' onclick="fin2_abrirConciliador(\'' + kind + '\')">🧮 Conciliar valor</button>';
 }
 
+
+// Camadas (3 tons de laranja) e indicador de status à esquerda
+var FIN2_LAYER = { quitado: ['rgba(255,133,0,.12)', '#FF8500'], aberto: ['rgba(255,113,0,.24)', '#FF7100'], previsto: ['rgba(255,93,0,.38)', '#FF5D00'] };
+var FIN2_STATUS = { ok: ['#059669', 'Recebido/Pago'], venc: ['#DC2626', 'Vencido'], prox: ['#EAB308', 'Vence em até 7 dias'], fut: ['#CBD5E1', 'A vencer (mais de 7 dias)'] };
+function fin2_rowFmt(kind) {
+  return function(r) {
+    var ab = fin2_aberto(kind, r), ref = fin2_dataRef(kind, r), hoje = fin2_hojeIso(), st;
+    if (!ab) st = 'ok'; else if (ref && ref < hoje) st = 'venc'; else if (ref && ref <= fin2_somaDias(hoje, 7)) st = 'prox'; else st = 'fut';
+    var layer = r.previsto ? 'previsto' : (ab ? 'aberto' : 'quitado');
+    return { bg: FIN2_LAYER[layer][0], bar: FIN2_STATUS[st][0], txt: FIN2_STATUS[st][1] };
+  };
+}
+function fin2_legenda(kind) {
+  var dot = function(c, t) { return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><i style="width:10px;height:10px;border-radius:2px;background:' + c + ';display:inline-block"></i>' + t + '</span>'; };
+  var lay = function(k, t) { return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><i style="width:22px;height:10px;border-radius:2px;background:' + FIN2_LAYER[k][1] + ';display:inline-block;opacity:.75"></i>' + t + '</span>'; };
+  var rec = kind === 'rec';
+  return '<div style="font-size:11px;color:var(--muted);margin:0 2px 8px;display:flex;flex-wrap:wrap;gap:4px 0"><b style="margin-right:8px">Camadas:</b>' + lay('quitado', rec ? 'Recebido' : 'Pago') + lay('aberto', rec ? 'A receber' : 'A pagar') + lay('previsto', 'Previsto (OS)') +
+    '<b style="margin:0 8px 0 14px">Barra:</b>' + dot(FIN2_STATUS.ok[0], rec ? 'recebido' : 'pago') + dot(FIN2_STATUS.venc[0], 'vencido') + dot(FIN2_STATUS.prox[0], 'vence em até 7 dias') + dot(FIN2_STATUS.fut[0], 'a vencer') + '</div>';
+}
+
 function renderCasReceber() {
-  fin2_hostPrep('tab-cas-receber', fin2_toolbar('cas-rec', '📥 Notas a receber', 'Uma linha por nota/parcela (líquido = bruto − retenções). Importe XML de NF-e/NFS-e emitidas ou use “Conciliar valor” quando o cliente paga várias notas juntas.', { extra: fin2_acoesBar('rec') }) + fin2_filtroBar('rec') + '<div id="cas-rec-host"></div>');
+  fin2_hostPrep('tab-cas-receber', fin2_toolbar('cas-rec', '📥 Notas a receber', 'Uma linha por nota/parcela (líquido = bruto − retenções). Importe XML de NF-e/NFS-e emitidas ou use “Conciliar valor” quando o cliente paga várias notas juntas.', { extra: fin2_acoesBar('rec') }) + fin2_filtroBar('rec') + fin2_legenda('rec') + '<div id="cas-rec-host"></div>');
   fin2_grid('cas-rec', 'cas-rec-host', {
-    coll: 'fin2Receber', sort: 'venc', filter: function(r) { return fin2_passaFiltro('rec', r); },
+    coll: 'fin2Receber', sort: 'venc', rowFmt: fin2_rowFmt('rec'), filter: function(r) { return fin2_passaFiltro('rec', r); },
     defaults: function() { return { em: fin2_hojeIso(), nf: '', cli: '', tipo: 'Serviço', bruto: 0, ret: 0, venc: null, rec: false, dtRec: null, obs: '' }; },
     cols: [
       { k: 'em', l: 'Emissão', t: 'date' }, { k: 'nf', l: 'Nº NF', t: 'text', w: 60 }, { k: 'cli', l: 'Cliente', t: 'text', w: 220 },
@@ -17817,9 +17839,9 @@ function renderCasReceber() {
   fin2_resumoFiltro('rec');
 }
 function renderCasPagar() {
-  fin2_hostPrep('tab-cas-pagar', fin2_toolbar('cas-pag', '📤 Contas a pagar', 'Fornecedores, eventuais, investimentos e extras de pessoal. O mês é o do vencimento (ou da data, se não houver vencimento). Importe XML de NF-e de compra (destinada à Lumarc).', { extra: fin2_acoesBar('pag') }) + fin2_filtroBar('pag') + '<div id="cas-pag-host"></div>');
+  fin2_hostPrep('tab-cas-pagar', fin2_toolbar('cas-pag', '📤 Contas a pagar', 'Fornecedores, eventuais, investimentos e extras de pessoal. O mês é o do vencimento (ou da data, se não houver vencimento). Importe XML de NF-e de compra (destinada à Lumarc).', { extra: fin2_acoesBar('pag') }) + fin2_filtroBar('pag') + fin2_legenda('pag') + '<div id="cas-pag-host"></div>');
   fin2_grid('cas-pag', 'cas-pag-host', {
-    coll: 'fin2Pagar', sort: 'venc', filter: function(r) { return fin2_passaFiltro('pag', r); },
+    coll: 'fin2Pagar', sort: 'venc', rowFmt: fin2_rowFmt('pag'), filter: function(r) { return fin2_passaFiltro('pag', r); },
     defaults: function() { return { natureza: _fin2F.pag.nat || 'fornecedor', data: fin2_hojeIso(), venc: null, forn: '', desc: '', ref: '', valor: 0, status: 'A pagar', dtPg: null, obs: '' }; },
     cols: [
       { k: 'natureza', l: 'Natureza', t: 'sel', opts: FIN2_NATUREZAS }, { k: 'data', l: 'Data', t: 'date' }, { k: 'venc', l: 'Vencimento', t: 'date' },
@@ -18039,7 +18061,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-10-08T17:30:00Z';
+const APP_BUILD_VERSION = '2026-10-08T18:30:00Z';
 
 async function verificarVersaoAtualizada() {
   try {

@@ -1059,6 +1059,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   <div class="tab"         data-group="cad"     onclick="switchGroup('cad',this)">🗂️ Cadastros</div>
   <div class="tab"         data-group="fin"     onclick="switchGroup('fin',this)">💰 Financeiro</div>
   <div class="tab"         data-group="cas"     onclick="switchGroup('cas',this)" style="display:none">💧 Cascata</div>
+  <div class="tab"         data-group="div"     onclick="switchGroup('div',this)" style="display:none">🏦 Dívidas</div>
   <div class="tab"         data-group="alm"     onclick="switchGroup('alm',this)">🏪 Almoxarifado</div>
   <div class="tab"         data-group="apo"     onclick="switchGroup('apo',this)">⏱️ Apontamentos</div>
   <div class="tab"         data-group="qual"    onclick="switchGroup('qual',this)">🔬 Qualidade</div>
@@ -1561,6 +1562,10 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 <div id="tab-cas-fixas" class="tab-content"></div>
 <div id="tab-cas-dividas" class="tab-content"></div>
 <div id="tab-cas-param" class="tab-content"></div>
+<div id="tab-div-painel" class="tab-content"></div>
+<div id="tab-div-contratos" class="tab-content"></div>
+<div id="tab-div-parcelas" class="tab-content"></div>
+<div id="tab-div-cronograma" class="tab-content"></div>
 
 <!-- ===================== TAB: FINANCEIRO DASHBOARD ===================== -->
 <div id="tab-fin-dash" class="tab-content">
@@ -4506,6 +4511,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Desligar esconde as telas e para de gerar registros automáticos (contas, movimentos de estoque). Nenhum dado é apagado e dá para religar quando quiser. Só o administrador altera.</div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-fin" onchange="salvarModulos()" style="width:auto;flex:none"> 💰 Financeiro — contas a pagar/receber, caixas, conciliação, fluxo, DRE</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-cas" onchange="salvarModulos()" style="width:auto;flex:none"> 💧 Cascata de cobertura — substitui o Financeiro antigo (esconde-o e para a geração automática de salários)</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-div" onchange="salvarModulos()" style="width:auto;flex:none"> 🏦 Dívidas — contratos, parcelas, saldo devedor e margem mínima (independente do Financeiro antigo)</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px"><input type="checkbox" id="mod-alm" onchange="salvarModulos()" style="width:auto;flex:none"> 🏪 Almoxarifado — estoque, entradas e saídas de material</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:12px"><input type="checkbox" id="mod-pc" onchange="salvarModulos()" style="width:auto;flex:none"> 🛒 Pedido de Compra interno — emitir o PC dentro do ERP. Desligado: o pedido é emitido no Omie e a RC registra o número</label>
     <div style="font-size:11px;color:var(--muted)">As opções são aplicadas assim que você marca ou desmarca.</div>
@@ -6870,6 +6876,8 @@ let DB = {
   fin2Pagar: [],
   fin2Guias: [],
   fin2Dividas: [],
+  dividas: [],
+  dividaParcelas: [],
   fin2Fixas: [],
   fin2Pessoas: [],
   fin2Param: [],
@@ -9440,7 +9448,7 @@ function saveAll(silent) {
     config:        DB.config,
     tributario:    DB.tributario,
     folhaMensal:   DB.folhaMensal,
-    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, fin2Receber: DB.fin2Receber, fin2Pagar: DB.fin2Pagar, fin2Guias: DB.fin2Guias, fin2Dividas: DB.fin2Dividas, fin2Fixas: DB.fin2Fixas, fin2Pessoas: DB.fin2Pessoas, fin2Param: DB.fin2Param, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
+    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, fin2Receber: DB.fin2Receber, fin2Pagar: DB.fin2Pagar, fin2Guias: DB.fin2Guias, fin2Dividas: DB.fin2Dividas, dividas: DB.dividas, dividaParcelas: DB.dividaParcelas, fin2Fixas: DB.fin2Fixas, fin2Pessoas: DB.fin2Pessoas, fin2Param: DB.fin2Param, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
     transferenciasCaixa: DB.transferenciasCaixa || [],
     regrasClassificacaoCaixa: DB.regrasClassificacaoCaixa || null,
     nfAliases: DB.nfAliases || {},
@@ -9711,6 +9719,8 @@ function applyLoadedData(save, skipOrcData) {
   DB.fin2Pagar = mergeArrayByKey(DB.fin2Pagar, save.fin2Pagar, 'id');
   DB.fin2Guias = mergeArrayByKey(DB.fin2Guias, save.fin2Guias, 'id');
   DB.fin2Dividas = mergeArrayByKey(DB.fin2Dividas, save.fin2Dividas, 'id');
+  DB.dividas = mergeArrayByKey(DB.dividas, save.dividas, 'id');
+  DB.dividaParcelas = mergeArrayByKey(DB.dividaParcelas, save.dividaParcelas, 'id');
   DB.fin2Fixas = mergeArrayByKey(DB.fin2Fixas, save.fin2Fixas, 'id');
   DB.fin2Pessoas = mergeArrayByKey(DB.fin2Pessoas, save.fin2Pessoas, 'id');
   DB.fin2Param = mergeArrayByKey(DB.fin2Param, save.fin2Param, 'id');
@@ -9907,6 +9917,12 @@ const TAB_GROUPS = {
     { id:'tab-cas-fixas',    label:'🏠 Fixas' },
     { id:'tab-cas-dividas',  label:'🏦 Dívidas' },
     { id:'tab-cas-param',    label:'⚙️ Parâmetros' },
+  ],
+  div: [
+    { id:'tab-div-painel',     label:'📊 Painel' },
+    { id:'tab-div-contratos',  label:'📄 Contratos' },
+    { id:'tab-div-parcelas',   label:'📅 Parcelas do mês' },
+    { id:'tab-div-cronograma', label:'📉 Cronograma de quitação' },
   ],
   alm: [
     { id:'tab-alm-recebimento', label:'📦 Recebimento de Material' },
@@ -10219,6 +10235,10 @@ function switchTab(tabId, subTabEl) {
     'tab-cas-fixas':     renderCasFixas,
     'tab-cas-dividas':   renderCasDividas,
     'tab-cas-param':     renderCasParam,
+    'tab-div-painel':     renderDivPainel,
+    'tab-div-contratos':  renderDivContratos,
+    'tab-div-parcelas':   renderDivParcelas,
+    'tab-div-cronograma': renderDivCronograma,
     'tab-plano':         renderPlanoContas,
     'tab-dre':           renderDREGerencial,
     'tab-ranking-forn':  renderRankingFornecedores,
@@ -17440,7 +17460,9 @@ function fin2_calc(mes) {
   var pessoal = pagar.pessoal;
   fin2_coll('fin2Pessoas').forEach(function(p) { pessoal += fin2_custoPessoa(p, P).total; });
   var fixas = 0; fin2_coll('fin2Fixas').forEach(function(f) { if (f.ativa !== false) fixas += (+f.valor || 0); });
-  var dividas = 0; fin2_coll('fin2Dividas').forEach(function(d) { dividas += fin2_dividaNoMes(d, mes); });
+  var dividas = 0;
+  if (DB.dividas && DB.dividas.length && typeof div_totalMes === 'function') dividas = div_totalMes(mes, true);
+  else fin2_coll('fin2Dividas').forEach(function(d) { dividas += fin2_dividaNoMes(d, mes); });
   var prev = fin2_previsto(mes);
   var needs = [
     { k: 'impostos', nome: 'Impostos', desc: guias > 0 ? 'guias lançadas' : 'estimativa', v: impostos },
@@ -17865,6 +17887,484 @@ function fin2_modal(titulo, corpo, largura) {
 }
 function fin2_fecharModal() { var m = document.getElementById('f2-modal'); if (m) m.remove(); }
 
+// ════════════════════════════════════════════════════════════════════════════
+// MÓDULO DÍVIDAS (Fase 1) — contrato + cronograma de parcelas
+// Coleções próprias: dividas (contrato) e dividaParcelas (cronograma).
+// Independente do Financeiro antigo e da Cascata; a Cascata só LÊ o total do mês.
+// Ligado por DB.config.modulos.div. Nada aqui altera OS, orçamentos, SOL/RC.
+// ════════════════════════════════════════════════════════════════════════════
+var DIV_ORIGENS = [
+  { k: 'Empréstimo bancário (capital de giro, CCB)', sis: 'PRICE', deb: true, gar: '' },
+  { k: 'Financiamento de veículo/máquina', sis: 'PRICE', deb: false, gar: 'Alienação fiduciária' },
+  { k: 'Parcelamento fiscal federal (PGFN/Receita)', sis: 'CORRIGIDA_SELIC', deb: false, gar: '' },
+  { k: 'Parcelamento fiscal estadual/municipal (ICMS/ISS)', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' },
+  { k: 'Cartão de crédito parcelado', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' },
+  { k: 'Cheque especial / conta garantida', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' },
+  { k: 'Fornecedor parcelado (ex.: compra de máquina)', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' },
+  { k: 'Mútuo / empréstimo de pessoa', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' },
+  { k: 'Acordo / renegociação', sis: 'PARCELA_FIXA_INFORMADA', deb: false, gar: '' }
+];
+var DIV_SISTEMAS = ['PRICE', 'SAC', 'PARCELA_FIXA_INFORMADA', 'CORRIGIDA_SELIC'];
+var DIV_CONTAS = ['Bradesco', 'Itaú', 'Santander'];
+var DIV_REGRAS = [['MANTER', 'Manter o dia'], ['PROXIMO_DIA_UTIL', 'Próximo dia útil'], ['DIA_UTIL_ANTERIOR', 'Dia útil anterior']];
+var DIV_CORES = ['#2563eb', '#f59e0b', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c'];
+var _divMes = null;
+
+function div_ativo() { return typeof moduloAtivo === 'function' && moduloAtivo('div'); }
+function div_podeEditar() { return !!(typeof currentUser !== 'undefined' && currentUser && currentUser.perfil === 'admin'); }
+function div_coll(n) { if (!DB[n]) DB[n] = []; return DB[n]; }
+function div_pad(n) { return (n < 10 ? '0' : '') + n; }
+function div_r2(v) { return Math.round((+v || 0) * 100) / 100; }
+function div_esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function div_brl(v) { return 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function div_hoje() { var d = new Date(); return d.getFullYear() + '-' + div_pad(d.getMonth() + 1) + '-' + div_pad(d.getDate()); }
+function div_mesHoje() { return div_hoje().slice(0, 7); }
+function div_mes() { if (!_divMes) _divMes = div_mesHoje(); return _divMes; }
+function div_ym(s) { return s ? String(s).slice(0, 7) : ''; }
+function div_dtbr(s) { if (!s) return '—'; var p = String(s).slice(0, 10).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+function div_mesNome(m) { var p = m.split('-'); var n = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']; return n[+p[1] - 1] + '/' + String(p[0]).slice(2); }
+function div_addMesYM(ym, n) { var p = ym.split('-'); var t = (+p[0]) * 12 + (+p[1] - 1) + n; return Math.floor(t / 12) + '-' + div_pad((t % 12) + 1); }
+function div_difMeses(a, b) { var x = a.split('-'), y = b.split('-'); return ((+y[0]) * 12 + +y[1]) - ((+x[0]) * 12 + +x[1]); }
+function div_num(v) {
+  if (typeof v === 'number') return v;
+  var s = String(v == null ? '' : v).replace(/[R$\s%]/g, '');
+  if (!s) return 0;
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  var n = parseFloat(s); return isNaN(n) ? 0 : n;
+}
+function div_novoId() {
+  var ano = new Date().getFullYear(), max = 0;
+  div_coll('dividas').forEach(function (c) { var m = /^DIV-(\d{4})-(\d+)$/.exec(c.id || ''); if (m && +m[1] === ano) max = Math.max(max, +m[2]); });
+  return 'DIV-' + ano + '-' + ('00' + (max + 1)).slice(-3);
+}
+
+// ── Datas de vencimento ─────────────────────────────────────────────────────
+function div_vencimento(primeira, k, dia, regra) {
+  var ym = div_addMesYM(primeira.slice(0, 7), k), p = ym.split('-');
+  var ult = new Date(+p[0], +p[1], 0).getDate();
+  var d = new Date(+p[0], +p[1] - 1, Math.min(+dia || +primeira.slice(8, 10) || 1, ult));
+  if (regra === 'PROXIMO_DIA_UTIL') { while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); }
+  else if (regra === 'DIA_UTIL_ANTERIOR') { while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); }
+  return d.getFullYear() + '-' + div_pad(d.getMonth() + 1) + '-' + div_pad(d.getDate());
+}
+
+// ── Gerador de cronograma (PRICE / SAC / parcela fixa / Selic) ──────────────
+function div_gerar(c) {
+  var n = Math.max(0, parseInt(c.qtdParcelas, 10) || 0), PV = +c.valorContratado || 0;
+  var i = (+c.taxaJurosMes || 0) / 100, out = [];
+  if (!n || !c.dataPrimeiraParcela) return out;
+  var sis = c.sistemaAmortizacao || 'PARCELA_FIXA_INFORMADA';
+  var venc = function (k) { return div_vencimento(c.dataPrimeiraParcela, k, c.diaVencimento, c.regraDiaUtil || 'MANTER'); };
+  var saldo, k, juros, princ, parc;
+  if (sis === 'PRICE' || sis === 'SAC') {
+    // Carência: juros do período extra entram no saldo antes de calcular as parcelas
+    var extra = c.dataContratacao ? Math.max(0, div_difMeses(div_ym(c.dataContratacao), div_ym(c.dataPrimeiraParcela)) - 1) : 0;
+    saldo = i > 0 ? div_r2(PV * Math.pow(1 + i, extra)) : PV;
+    var pmt = i > 0 ? div_r2(saldo * i * Math.pow(1 + i, n) / (Math.pow(1 + i, n) - 1)) : div_r2(saldo / n);
+    var amort = div_r2(saldo / n);
+    for (k = 0; k < n; k++) {
+      juros = div_r2(saldo * i);
+      if (sis === 'PRICE') { princ = div_r2(pmt - juros); } else { princ = amort; }
+      if (k === n - 1) princ = saldo;           // zera o saldo (absorve arredondamento)
+      parc = div_r2(princ + juros);
+      saldo = div_r2(saldo - princ);
+      out.push({ numero: k + 1, vencimento: venc(k), valorPrevisto: parc, principalPrevisto: princ, jurosPrevisto: juros, saldoDevedorApos: Math.max(0, saldo) });
+    }
+  } else {
+    var v = +c.valorParcela || 0, resta = div_r2(v * n);
+    for (k = 0; k < n; k++) {
+      resta = div_r2(resta - v);
+      out.push({ numero: k + 1, vencimento: venc(k), valorPrevisto: v, principalPrevisto: v, jurosPrevisto: 0, saldoDevedorApos: Math.max(0, resta) });
+    }
+  }
+  return out;
+}
+// Taxa implícita (informativa): PV = parcela × [1 − (1+i)^−n] / i
+function div_taxaImplicita(PV, parcela, n) {
+  if (!(PV > 0) || !(parcela > 0) || !(n > 0) || parcela * n <= PV) return 0;
+  var lo = 0, hi = 1, f = function (i) { return parcela * (1 - Math.pow(1 + i, -n)) / i - PV; };
+  for (var t = 0; t < 80; t++) { var mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
+  return (lo + hi) / 2 * 100;
+}
+function div_pmtPrice(PV, taxaPct, n, extra) {
+  var i = (+taxaPct || 0) / 100; var s = i > 0 ? PV * Math.pow(1 + i, extra || 0) : PV;
+  return i > 0 ? div_r2(s * i * Math.pow(1 + i, n) / (Math.pow(1 + i, n) - 1)) : div_r2(s / n);
+}
+
+// ── Consultas ───────────────────────────────────────────────────────────────
+function div_parcelasDe(idDiv) { return div_coll('dividaParcelas').filter(function (p) { return p.idDivida === idDiv; }).sort(function (a, b) { return a.numero - b.numero; }); }
+function div_statusParcela(p, hoje) {
+  hoje = hoje || div_hoje();
+  if (p.dataPagamento) return 'PAGA';
+  if (p.vencimento < hoje) return 'ATRASADA';
+  var lim = new Date(hoje + 'T12:00:00'); lim.setDate(lim.getDate() + 7);
+  var limS = lim.getFullYear() + '-' + div_pad(lim.getMonth() + 1) + '-' + div_pad(lim.getDate());
+  return p.vencimento <= limS ? 'VENCE_EM_7_DIAS' : 'A_VENCER';
+}
+function div_valorParcela(p) { return p.dataPagamento ? (+p.valorPago || +p.valorPrevisto || 0) : (+p.valorPrevisto || 0); }
+function div_statusContrato(c) {
+  if (c.statusManual) return c.statusManual;
+  var ps = div_parcelasDe(c.id);
+  if (ps.length && ps.every(function (p) { return p.dataPagamento; })) return 'QUITADA';
+  if (c.pendente) return 'ATIVA';
+  return ps.some(function (p) { return div_statusParcela(p) === 'ATRASADA'; }) ? 'EM_ATRASO' : 'ATIVA';
+}
+function div_saldoDevedor(c) {
+  var ps = div_parcelasDe(c.id); if (!ps.length) return 0;
+  if (c.statusManual === 'QUITADA') return 0;
+  var abertas = ps.filter(function (p) { return !p.dataPagamento; });
+  if (+c.taxaJurosMes > 0 && (c.sistemaAmortizacao === 'PRICE' || c.sistemaAmortizacao === 'SAC')) {
+    var pagas = ps.filter(function (p) { return p.dataPagamento; });
+    if (pagas.length) return pagas[pagas.length - 1].saldoDevedorApos || 0;
+    return abertas.reduce(function (s, p) { return s + (+p.principalPrevisto || 0); }, 0);
+  }
+  return div_r2(abertas.reduce(function (s, p) { return s + (+p.valorPrevisto || 0); }, 0));
+}
+function div_totalMes(mes, soMargem) {
+  var t = 0;
+  div_coll('dividas').forEach(function (c) {
+    if (c.statusManual === 'RENEGOCIADA' && false) return;
+    if (soMargem && c.entraNaMargemMinima === false) return;
+    div_parcelasDe(c.id).forEach(function (p) { if (div_ym(p.vencimento) === mes) t += div_valorParcela(p); });
+  });
+  return div_r2(t);
+}
+function div_fatBase() { var v = DB.config && +DB.config.divFatBase; return v > 0 ? v : 100000; }
+function div_margemMinima(mes) { return div_totalMes(mes || div_mesHoje(), true) / div_fatBase(); }
+function div_curtoLongo(hoje) {
+  hoje = hoje || div_hoje();
+  var lim = div_addMesYM(hoje.slice(0, 7), 12) + hoje.slice(7), curto = 0, longo = 0;
+  div_coll('dividas').forEach(function (c) {
+    if (c.statusManual === 'QUITADA') return;
+    div_parcelasDe(c.id).forEach(function (p) { if (p.dataPagamento) return; if (p.vencimento <= lim) curto += (+p.valorPrevisto || 0); else longo += (+p.valorPrevisto || 0); });
+  });
+  return { curto: div_r2(curto), longo: div_r2(longo) };
+}
+function div_ultimoVenc(c) { var ps = div_parcelasDe(c.id); return ps.length ? ps[ps.length - 1].vencimento : ''; }
+
+// ── Gravação ────────────────────────────────────────────────────────────────
+function div_agora() { return new Date().toISOString(); }
+function div_idParc(idDiv, n) { return idDiv + '-p' + ('00' + n).slice(-3); }
+// Regrava o cronograma preservando parcelas pagas e as editadas à mão
+function div_aplicarCronograma(c, parcelasPagasInicio) {
+  var existentes = div_parcelasDe(c.id), gerado = div_gerar(c), mant = {};
+  existentes.forEach(function (p) { if (p.dataPagamento || p.editadaManualmente) mant[p.numero] = p; });
+  var colecao = div_coll('dividaParcelas');
+  existentes.forEach(function (p) {
+    if (mant[p.numero]) return;
+    registrarTombstone(p.id);
+    colecao.splice(colecao.indexOf(p), 1);
+  });
+  gerado.forEach(function (g2) {
+    if (mant[g2.numero]) {
+      // atualiza só o saldo devedor previsto; mantém o que o usuário baixou/editou
+      mant[g2.numero].saldoDevedorApos = g2.saldoDevedorApos; mant[g2.numero]._updatedAt = div_agora();
+      return;
+    }
+    var pago = parcelasPagasInicio && g2.numero <= parcelasPagasInicio;
+    colecao.push({
+      id: div_idParc(c.id, g2.numero), idDivida: c.id, numero: g2.numero, vencimento: g2.vencimento,
+      valorPrevisto: g2.valorPrevisto, principalPrevisto: g2.principalPrevisto, jurosPrevisto: g2.jurosPrevisto, saldoDevedorApos: g2.saldoDevedorApos,
+      dataPagamento: pago ? g2.vencimento : null, valorPago: pago ? g2.valorPrevisto : 0, jurosMulta: 0, editadaManualmente: false, _updatedAt: div_agora()
+    });
+    if (DB._tombstones) delete DB._tombstones[div_idParc(c.id, g2.numero)];
+  });
+}
+function div_excluir(id) {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  var c = div_coll('dividas').find(function (x) { return x.id === id; }); if (!c) return;
+  if (!confirm('Excluir o contrato "' + c.descricao + '" e todas as suas parcelas?')) return;
+  div_parcelasDe(id).forEach(function (p) { registrarTombstone(p.id); DB.dividaParcelas.splice(DB.dividaParcelas.indexOf(p), 1); });
+  registrarTombstone(id); DB.dividas.splice(DB.dividas.indexOf(c), 1);
+  saveAll(true); div_rerender();
+}
+
+// ── Baixa de parcela ────────────────────────────────────────────────────────
+function div_baixaAbrir(idParc) {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  var p = div_coll('dividaParcelas').find(function (x) { return x.id === idParc; }); if (!p) return;
+  var c = div_coll('dividas').find(function (x) { return x.id === p.idDivida; }) || {};
+  var selic = c.sistemaAmortizacao === 'CORRIGIDA_SELIC';
+  var corpo = '<div style="padding:16px 18px;display:grid;gap:10px;font-size:13px">' +
+    '<div><b>' + div_esc(c.descricao) + '</b> — parcela ' + p.numero + '/' + (c.qtdParcelas || '?') + ' · vence ' + div_dtbr(p.vencimento) + '</div>' +
+    (selic ? '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;font-size:12px">Parcelamento corrigido pela Selic: informe o valor real do DARF deste mês. As próximas parcelas passam a usar este valor.</div>' : '') +
+    '<label>Data do pagamento<input type="date" id="dvb-data" value="' + div_hoje() + '" style="width:100%"></label>' +
+    '<label>Valor pago (R$)<input type="text" id="dvb-valor" value="' + String(p.valorPrevisto).replace('.', ',') + '" style="width:100%"></label>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="fin2_fecharModal()">Cancelar</button><button class="btn btn-primary btn-sm" onclick="div_baixaSalvar(\'' + idParc + '\')">Confirmar pagamento</button></div></div>';
+  fin2_modal('Baixar parcela', corpo, 460);
+}
+function div_baixaSalvar(idParc) {
+  var p = div_coll('dividaParcelas').find(function (x) { return x.id === idParc; }); if (!p) return;
+  var c = div_coll('dividas').find(function (x) { return x.id === p.idDivida; }) || {};
+  var dt = g('dvb-data').value, v = div_r2(div_num(g('dvb-valor').value));
+  if (!dt) { alert('Informe a data do pagamento.'); return; }
+  if (!(v > 0)) { alert('Informe o valor pago.'); return; }
+  p.dataPagamento = dt; p.valorPago = v; p.jurosMulta = Math.max(0, div_r2(v - (+p.valorPrevisto || 0))); p._updatedAt = div_agora();
+  if (c.sistemaAmortizacao === 'CORRIGIDA_SELIC') {
+    // próxima projeção usa o último valor pago
+    div_parcelasDe(c.id).forEach(function (q) {
+      if (q.numero > p.numero && !q.dataPagamento && !q.editadaManualmente) { q.valorPrevisto = v; q.principalPrevisto = v; q._updatedAt = div_agora(); }
+    });
+    var rest = 0, ps = div_parcelasDe(c.id);
+    for (var k = ps.length - 1; k >= 0; k--) { ps[k].saldoDevedorApos = div_r2(rest); rest += ps[k].dataPagamento ? 0 : (+ps[k].valorPrevisto || 0); }
+  }
+  fin2_fecharModal(); saveAll(true); div_rerender();
+  showToast('✅ Parcela baixada.');
+}
+function div_baixaDesfazer(idParc) {
+  if (!div_podeEditar()) return;
+  var p = div_coll('dividaParcelas').find(function (x) { return x.id === idParc; }); if (!p) return;
+  if (!confirm('Desfazer a baixa desta parcela?')) return;
+  p.dataPagamento = null; p.valorPago = 0; p.jurosMulta = 0; p._updatedAt = div_agora();
+  saveAll(true); div_rerender();
+}
+
+// ── Formulário de contrato ──────────────────────────────────────────────────
+var _divForm = null;
+function div_form(id) {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  var c = id ? div_coll('dividas').find(function (x) { return x.id === id; }) : null;
+  var d = c || { origem: DIV_ORIGENS[0].k, sistemaAmortizacao: DIV_ORIGENS[0].sis, debitoAutomatico: DIV_ORIGENS[0].deb, regraDiaUtil: 'MANTER', contaDebito: DIV_CONTAS[0], entraNaMargemMinima: true, dataContratacao: div_hoje(), diaVencimento: 10, qtdParcelas: 12, parcelasPagas: 0 };
+  _divForm = { id: id || null };
+  var sel = function (idc, opts, val, pares) { return '<select id="' + idc + '" style="width:100%">' + opts.map(function (o) { var k = pares ? o[0] : o, l = pares ? o[1] : o; return '<option value="' + div_esc(k) + '"' + (k === val ? ' selected' : '') + '>' + div_esc(l) + '</option>'; }).join('') + '</select>'; };
+  var inp = function (idc, val, tipo, ph) { return '<input id="' + idc + '" type="' + (tipo || 'text') + '" value="' + div_esc(val == null ? '' : val) + '" placeholder="' + (ph || '') + '" style="width:100%">'; };
+  var lb = function (t, h) { return '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block">' + t + h + '</label>'; };
+  var corpo = '<div style="padding:16px 18px;font-size:13px">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">' +
+    lb('Origem', sel('dv-origem', DIV_ORIGENS.map(function (o) { return o.k; }), d.origem)).replace('<select', '<select onchange="div_origemMudou()"') +
+    lb('Descrição *', inp('dv-desc', d.descricao, 'text', 'Ex.: Parcelamento PGFN 2026')) +
+    lb('Credor *', inp('dv-credor', d.credor, 'text', 'Banco, órgão ou pessoa')) +
+    lb('Nº do contrato / parcelamento', inp('dv-ncontrato', d.numeroContrato)) +
+    lb('Finalidade', inp('dv-fin', d.finalidade, 'text', 'Capital de giro, máquina, veículo…')) +
+    lb('Data da contratação *', inp('dv-dtcontr', d.dataContratacao, 'date')) +
+    lb('Valor contratado (R$) *', inp('dv-valor', d.valorContratado != null ? String(d.valorContratado).replace('.', ',') : '', 'text')) +
+    lb('Valor líquido recebido (R$)', inp('dv-liquido', d.valorLiquidoRecebido != null ? String(d.valorLiquidoRecebido).replace('.', ',') : '', 'text')) +
+    lb('Sistema de amortização *', sel('dv-sis', DIV_SISTEMAS, d.sistemaAmortizacao)) +
+    lb('Taxa de juros (% ao mês)', inp('dv-taxa', d.taxaJurosMes != null ? String(d.taxaJurosMes).replace('.', ',') : '', 'text', 'Em branco se desconhecida')) +
+    lb('Quantidade de parcelas *', inp('dv-qtd', d.qtdParcelas, 'number')) +
+    lb('Valor da parcela (R$)', inp('dv-vparc', d.valorParcela != null ? String(d.valorParcela).replace('.', ',') : '', 'text', 'Obrigatório em parcela fixa/Selic')) +
+    lb('Dia de vencimento (1–31) *', inp('dv-dia', d.diaVencimento, 'number')) +
+    lb('Data da 1ª parcela *', inp('dv-prim', d.dataPrimeiraParcela, 'date')) +
+    lb('Se cair em fim de semana', sel('dv-regra', DIV_REGRAS, d.regraDiaUtil, true)) +
+    lb('Conta de débito', sel('dv-conta', DIV_CONTAS, d.contaDebito)) +
+    lb('Débito automático?', sel('dv-deb', [['sim', 'Sim'], ['nao', 'Não']], d.debitoAutomatico ? 'sim' : 'nao', true)) +
+    lb('Garantia', inp('dv-gar', d.garantia, 'text', 'Aval, alienação do veículo…')) +
+    lb('Entra na margem mínima?', sel('dv-marg', [['sim', 'Sim'], ['nao', 'Não (pessoal / paga por fora)']], d.entraNaMargemMinima === false ? 'nao' : 'sim', true)) +
+    (id ? '' : lb('Parcelas já pagas', inp('dv-pagas', d.parcelasPagas || 0, 'number'))) +
+    '</div>' +
+    '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-top:10px">Observações<textarea id="dv-obs" rows="2" style="width:100%">' + div_esc(d.observacoes || '') + '</textarea></label>' +
+    '<div id="dv-aviso" style="margin-top:8px"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="fin2_fecharModal()">Cancelar</button><button class="btn btn-ghost btn-sm" onclick="div_previa()">Gerar cronograma (prévia)</button><button class="btn btn-primary btn-sm" onclick="div_salvarForm()">Salvar contrato</button></div>' +
+    '<div id="dv-prev" style="margin-top:12px"></div></div>';
+  fin2_modal(id ? 'Editar contrato ' + id : 'Novo contrato de dívida', corpo, 920);
+}
+function div_origemMudou() {
+  var o = DIV_ORIGENS.find(function (x) { return x.k === g('dv-origem').value; }); if (!o) return;
+  g('dv-sis').value = o.sis; g('dv-deb').value = o.deb ? 'sim' : 'nao';
+  if (o.gar && !g('dv-gar').value) g('dv-gar').value = o.gar;
+}
+function div_lerForm() {
+  var v = function (i) { return g(i) ? g(i).value : ''; };
+  var c = {
+    origem: v('dv-origem'), descricao: v('dv-desc').trim(), credor: v('dv-credor').trim(), numeroContrato: v('dv-ncontrato').trim(), finalidade: v('dv-fin').trim(),
+    dataContratacao: v('dv-dtcontr'), valorContratado: div_r2(div_num(v('dv-valor'))), sistemaAmortizacao: v('dv-sis'),
+    qtdParcelas: parseInt(v('dv-qtd'), 10) || 0, diaVencimento: parseInt(v('dv-dia'), 10) || 0, dataPrimeiraParcela: v('dv-prim'),
+    regraDiaUtil: v('dv-regra'), contaDebito: v('dv-conta'), debitoAutomatico: v('dv-deb') === 'sim', garantia: v('dv-gar').trim(),
+    entraNaMargemMinima: v('dv-marg') !== 'nao', observacoes: v('dv-obs').trim()
+  };
+  if (v('dv-liquido').trim()) c.valorLiquidoRecebido = div_r2(div_num(v('dv-liquido')));
+  if (v('dv-taxa').trim()) c.taxaJurosMes = div_num(v('dv-taxa'));
+  if (v('dv-vparc').trim()) c.valorParcela = div_r2(div_num(v('dv-vparc')));
+  return c;
+}
+function div_validar(c) {
+  var e = [];
+  if (!c.descricao) e.push('Informe a descrição.');
+  if (!c.credor) e.push('Informe o credor.');
+  if (!c.dataContratacao) e.push('Informe a data da contratação.');
+  if (!(c.valorContratado > 0) && c.sistemaAmortizacao !== 'PARCELA_FIXA_INFORMADA' && c.sistemaAmortizacao !== 'CORRIGIDA_SELIC') e.push('Informe o valor contratado.');
+  if (!(c.qtdParcelas > 0)) e.push('Informe a quantidade de parcelas.');
+  if (!(c.diaVencimento >= 1 && c.diaVencimento <= 31)) e.push('Dia de vencimento deve ficar entre 1 e 31.');
+  if (!c.dataPrimeiraParcela) e.push('Informe a data da 1ª parcela.');
+  if ((c.sistemaAmortizacao === 'PARCELA_FIXA_INFORMADA' || c.sistemaAmortizacao === 'CORRIGIDA_SELIC') && !(c.valorParcela > 0)) e.push('Neste sistema o valor da parcela é obrigatório.');
+  if ((c.sistemaAmortizacao === 'PRICE' || c.sistemaAmortizacao === 'SAC') && !(c.valorContratado > 0)) e.push('PRICE/SAC precisam do valor contratado.');
+  return e;
+}
+function div_avisos(c) {
+  var a = [];
+  if (c.sistemaAmortizacao === 'PRICE' && c.taxaJurosMes > 0 && c.valorParcela > 0 && c.qtdParcelas > 0) {
+    var extra = c.dataContratacao && c.dataPrimeiraParcela ? Math.max(0, div_difMeses(div_ym(c.dataContratacao), div_ym(c.dataPrimeiraParcela)) - 1) : 0;
+    var calc = div_pmtPrice(c.valorContratado, c.taxaJurosMes, c.qtdParcelas, extra);
+    if (Math.abs(calc - c.valorParcela) > 0.05) a.push('Com essa taxa a parcela PRICE seria ' + div_brl(calc) + ', mas você informou ' + div_brl(c.valorParcela) + ' (diferença de ' + div_brl(Math.abs(calc - c.valorParcela)) + '). O cronograma usa a taxa; confira os dados do contrato.');
+  }
+  if (!(c.taxaJurosMes > 0) && c.valorParcela > 0 && c.valorContratado > 0 && c.qtdParcelas > 0) {
+    var ti = div_taxaImplicita(c.valorContratado, c.valorParcela, c.qtdParcelas);
+    if (ti > 0) a.push('Taxa implícita estimada: ' + ti.toFixed(2).replace('.', ',') + '% ao mês (apenas informativo).');
+  }
+  return a;
+}
+function div_previa() {
+  var c = div_lerForm(), e = div_validar(c), ps = e.length ? [] : div_gerar(c);
+  var av = e.length ? e.map(function (x) { return '<div style="color:#b91c1c">• ' + div_esc(x) + '</div>'; }).join('') : div_avisos(c).map(function (x) { return '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:6px">⚠️ ' + div_esc(x) + '</div>'; }).join('');
+  g('dv-aviso').innerHTML = av;
+  if (e.length) { g('dv-prev').innerHTML = ''; return; }
+  var tot = ps.reduce(function (s, p) { return s + p.valorPrevisto; }, 0), jur = ps.reduce(function (s, p) { return s + p.jurosPrevisto; }, 0);
+  g('dv-prev').innerHTML = '<div style="font-size:12px;margin-bottom:6px"><b>' + ps.length + ' parcelas</b> · total ' + div_brl(tot) + (jur ? ' · juros ' + div_brl(jur) : '') + ' · termina em ' + div_dtbr(ps[ps.length - 1].vencimento) + '</div>' +
+    '<div style="max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="background:var(--bg2,#f1f5f9);position:sticky;top:0"><th style="padding:4px 8px;text-align:left">Nº</th><th style="text-align:left">Vencimento</th><th style="text-align:right">Parcela</th><th style="text-align:right">Juros</th><th style="text-align:right">Principal</th><th style="text-align:right;padding-right:8px">Saldo após</th></tr></thead><tbody>' +
+    ps.map(function (p) { return '<tr style="border-top:1px solid var(--border)"><td style="padding:3px 8px">' + p.numero + '/' + ps.length + '</td><td>' + div_dtbr(p.vencimento) + '</td><td style="text-align:right">' + div_brl(p.valorPrevisto) + '</td><td style="text-align:right">' + div_brl(p.jurosPrevisto) + '</td><td style="text-align:right">' + div_brl(p.principalPrevisto) + '</td><td style="text-align:right;padding-right:8px">' + div_brl(p.saldoDevedorApos) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+}
+function div_salvarForm() {
+  if (!div_podeEditar()) return;
+  var c = div_lerForm(), e = div_validar(c);
+  if (e.length) { g('dv-aviso').innerHTML = e.map(function (x) { return '<div style="color:#b91c1c">• ' + div_esc(x) + '</div>'; }).join(''); return; }
+  var lista = div_coll('dividas'), ex = _divForm && _divForm.id ? lista.find(function (x) { return x.id === _divForm.id; }) : null;
+  if (ex) { Object.assign(ex, c); ex.pendente = false; ex._updatedAt = div_agora(); c = ex; }
+  else { c.id = div_novoId(); c.status = 'ATIVA'; c._updatedAt = div_agora(); lista.push(c); }
+  var pagas = ex ? 0 : Math.min(parseInt((g('dv-pagas') || {}).value, 10) || 0, c.qtdParcelas);
+  div_aplicarCronograma(c, pagas);
+  saveAll(true); fin2_fecharModal(); div_rerender();
+  showToast('✅ Contrato salvo com ' + div_parcelasDe(c.id).length + ' parcelas.');
+}
+
+// ── Carga inicial (as 5 dívidas hoje em Despesas Fixas) ─────────────────────
+var DIV_CARGA = [
+  { descricao: 'Parcelamento impostos', credor: 'PGFN/Receita', origem: 'Parcelamento fiscal federal (PGFN/Receita)', sis: 'CORRIGIDA_SELIC', parcela: 7500, re: /parcelamento\s+impostos/i },
+  { descricao: 'Parc. BNB', credor: 'BNB', origem: 'Empréstimo bancário (capital de giro, CCB)', sis: 'PARCELA_FIXA_INFORMADA', parcela: 3000, re: /parc\.?\s*bnb|bnb/i },
+  { descricao: 'Parc. Banco do Brasil', credor: 'Banco do Brasil', origem: 'Empréstimo bancário (capital de giro, CCB)', sis: 'PARCELA_FIXA_INFORMADA', parcela: 1300, re: /banco\s+do\s+brasil|parc\.?\s*bb/i },
+  { descricao: 'Parcelamento Strada', credor: '', origem: 'Financiamento de veículo/máquina', sis: 'PARCELA_FIXA_INFORMADA', parcela: 1500, re: /parcelamento\s+strada/i },
+  { descricao: 'Carro secundário – parcelamento', credor: '', origem: 'Financiamento de veículo/máquina', sis: 'PARCELA_FIXA_INFORMADA', parcela: 1250, re: /carro\s+secund/i }
+];
+function div_semAcento(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function div_acharDespesas() {
+  var out = [];
+  (DB.despesas || []).forEach(function (d, i) {
+    var t = div_semAcento(d.desc || d.nome || '');
+    if (/seguro|strada.*seguro/i.test(t) && !/parcel/i.test(t)) return;
+    if (DIV_CARGA.some(function (x) { return x.re.test(t); })) out.push(i);
+  });
+  return out;
+}
+function div_cargaInicial() {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  if (div_coll('dividas').length && !confirm('Já existem contratos cadastrados. Criar as 5 dívidas atuais mesmo assim?')) return;
+  var ym = div_mesHoje();
+  if (!confirm('Vou criar 5 contratos com as parcelas atuais (R$ 14.550/mês). Como o ERP ainda não sabe quantas parcelas faltam, cada um nasce com 12 parcelas e fica marcado "conferir". Depois é só editar quantidade, taxa e saldo. Continuar?')) return;
+  DIV_CARGA.forEach(function (x) {
+    var c = {
+      id: div_novoId(), descricao: x.descricao, credor: x.credor, origem: x.origem, finalidade: '', numeroContrato: '', dataContratacao: ym + '-01',
+      valorContratado: 0, sistemaAmortizacao: x.sis, qtdParcelas: 12, valorParcela: x.parcela, diaVencimento: 28, dataPrimeiraParcela: ym + '-28',
+      regraDiaUtil: 'MANTER', contaDebito: 'Bradesco', debitoAutomatico: false, garantia: '', entraNaMargemMinima: true, status: 'ATIVA', pendente: true,
+      observacoes: 'Carga inicial: conferir parcelas restantes, dia de vencimento (28 é provisório), taxa e saldo.', _updatedAt: div_agora()
+    };
+    DB.dividas.push(c); div_aplicarCronograma(c, 0);
+  });
+  saveAll(true);
+  var idx = div_acharDespesas();
+  if (idx.length && confirm('Encontrei ' + idx.length + ' lançamento(s) dessas dívidas em Despesas Fixas:\n\n' + idx.map(function (i) { return '• ' + (DB.despesas[i].desc || '') + ' — ' + div_brl(DB.despesas[i].val); }).join('\n') + '\n\nRemover de Despesas Fixas? (Dívida tem fim, custo operacional não: ela sai do custo/hora e vira margem mínima.)')) {
+    idx.sort(function (a, b) { return b - a; }).forEach(function (i) {
+      var it = DB.despesas[i]; if (!it.id) it.id = 'desp-' + div_semAcento(it.desc).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + i;
+      registrarTombstone(it.id); DB.despesas.splice(i, 1);
+    });
+    saveAll(true);
+    if (typeof renderDespTable === 'function') { try { renderDespTable(); } catch (e) {} }
+    showToast('🧹 ' + idx.length + ' lançamento(s) removidos de Despesas Fixas.');
+  }
+  div_rerender();
+}
+
+// ── Telas ───────────────────────────────────────────────────────────────────
+function div_rerender() { if (typeof activeTabId !== 'undefined' && typeof switchTab === 'function') switchTab(activeTabId); }
+function div_setMes(v) { if (v) { _divMes = v; div_rerender(); } }
+function div_setFatBase(v) {
+  if (!div_podeEditar()) return;
+  if (!DB.config) DB.config = {};
+  DB.config.divFatBase = div_num(v); DB.config._updatedAt = div_agora(); saveAll(true); div_rerender();
+}
+var DIV_STATUS_COR = { PAGA: '#16a34a', ATRASADA: '#dc2626', VENCE_EM_7_DIAS: '#eab308', A_VENCER: '#94a3b8', ATIVA: '#16a34a', EM_ATRASO: '#dc2626', QUITADA: '#64748b', RENEGOCIADA: '#7c3aed' };
+var DIV_STATUS_TXT = { PAGA: 'Paga', ATRASADA: 'Atrasada', VENCE_EM_7_DIAS: 'Vence em 7 dias', A_VENCER: 'A vencer', ATIVA: 'Ativa', EM_ATRASO: 'Em atraso', QUITADA: 'Quitada', RENEGOCIADA: 'Renegociada' };
+function div_chip(st) { return '<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;color:#fff;background:' + (DIV_STATUS_COR[st] || '#64748b') + '">' + (DIV_STATUS_TXT[st] || st) + '</span>'; }
+function div_pagina(tabId, titulo, sub, extra, corpo) {
+  var h = '<style>.dvt th,.dvt td{padding:7px 10px}</style><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:200px"><h2 style="font-size:16px;font-weight:800">' + titulo + '</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">' + sub + '</p></div>' + (extra || '') + '</div>' + corpo;
+  fin2_hostPrep(tabId, h);
+}
+function div_card(rot, val, sub, cor) {
+  return '<div style="background:var(--panel);border:1px solid var(--border);border-left:5px solid ' + (cor || '#2563eb') + ';border-radius:10px;padding:12px 14px;flex:1;min-width:190px"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">' + rot + '</div><div style="font-size:22px;font-weight:800;margin-top:2px">' + val + '</div><div style="font-size:11px;color:var(--muted);margin-top:2px">' + (sub || '') + '</div></div>';
+}
+function renderDivPainel() {
+  var mes = div_mesHoje(), cs = div_coll('dividas'), ativos = cs.filter(function (c) { return div_statusContrato(c) !== 'QUITADA' && c.statusManual !== 'RENEGOCIADA'; });
+  var saldo = ativos.reduce(function (s, c) { return s + div_saldoDevedor(c); }, 0), cl = div_curtoLongo();
+  var parcMes = [], pagas = 0;
+  cs.forEach(function (c) { div_parcelasDe(c.id).forEach(function (p) { if (div_ym(p.vencimento) === mes) { parcMes.push(p); if (p.dataPagamento) pagas++; } }); });
+  var mm = div_margemMinima(mes), atrasadas = 0;
+  cs.forEach(function (c) { if (c.pendente) return; div_parcelasDe(c.id).forEach(function (p) { if (div_statusParcela(p) === 'ATRASADA') atrasadas++; }); });
+  var pend = cs.filter(function (c) { return c.pendente; }).length;
+  var corpo = '';
+  if (!cs.length) corpo += '<div style="background:var(--panel);border:1px dashed var(--border);border-radius:10px;padding:18px;margin-bottom:12px">Nenhuma dívida cadastrada. ' + (div_podeEditar() ? '<button class="btn btn-primary btn-sm" onclick="div_cargaInicial()">Criar as 5 dívidas atuais</button> <button class="btn btn-ghost btn-sm" onclick="div_form()">+ Novo contrato</button>' : '') + '</div>';
+  if (pend) corpo += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">⚠️ ' + pend + ' contrato(s) vieram da carga inicial e precisam de conferência (parcelas restantes, vencimento, taxa). Abra <b>Contratos</b> e edite cada um.</div>';
+  if (atrasadas) corpo += '<div style="background:#fee2e2;border:1px solid #dc2626;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">🔴 ' + atrasadas + ' parcela(s) vencida(s) sem baixa. Veja <b>Parcelas do mês</b>.</div>';
+  corpo += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+    div_card('Saldo devedor total', div_brl(saldo), ativos.length + ' contrato(s) ativo(s)', '#dc2626') +
+    div_card('Parcelas do mês', div_brl(div_totalMes(mes)), pagas + ' de ' + parcMes.length + ' pagas', '#f59e0b') +
+    div_card('Curto prazo (12 meses)', div_brl(cl.curto), 'Longo prazo: ' + div_brl(cl.longo), '#2563eb') +
+    div_card('Margem mínima atual', (mm * 100).toFixed(1).replace('.', ',') + '%', 'parcelas ÷ faturamento base de ' + div_brl(div_fatBase()), '#7c3aed') + '</div>';
+  corpo += '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Faturamento base (conservador)</b> <input type="text" value="' + String(div_fatBase()).replace('.', ',') + '" ' + (div_podeEditar() ? '' : 'disabled') + ' onchange="div_setFatBase(this.value)" style="width:140px"> <span style="color:var(--muted)">Sugestão: média dos últimos 12 meses recebidos. Este número alimenta a margem mínima.</span></div>';
+  corpo += '<div style="font-size:11px;color:var(--muted);margin-top:10px">Cobertura do mês e alertas no topo entram na próxima fase.</div>';
+  div_pagina('tab-div-painel', '🏦 Dívidas — painel', 'Quanto a empresa deve, quanto vence neste mês e quanto cada serviço precisa deixar de margem para cobrir as parcelas.', '', corpo);
+}
+function renderDivContratos() {
+  var cs = div_coll('dividas').slice().sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); }), ed = div_podeEditar();
+  var extra = ed ? '<button class="btn btn-ghost btn-sm" onclick="div_cargaInicial()">Carga inicial (5 dívidas)</button><button class="btn btn-primary btn-sm" onclick="div_form()">+ Novo contrato</button>' : '';
+  var linhas = cs.map(function (c) {
+    var ps = div_parcelasDe(c.id), pagas = ps.filter(function (p) { return p.dataPagamento; }).length, st = div_statusContrato(c);
+    return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px"><b>' + div_esc(c.descricao) + '</b>' + (c.pendente ? ' <span title="Conferir dados" style="color:#b45309">⚠ conferir</span>' : '') + '<div style="font-size:11px;color:var(--muted)">' + div_esc(c.id) + '</div></td>' +
+      '<td>' + div_esc(c.credor || '—') + '</td><td style="font-size:11px">' + div_esc(c.origem) + '</td>' +
+      '<td style="text-align:right">' + div_brl((ps.find(function (p) { return !p.dataPagamento; }) || ps[ps.length - 1] || {}).valorPrevisto) + '</td>' +
+      '<td style="text-align:center">' + pagas + '/' + ps.length + '</td><td style="text-align:right">' + div_brl(div_saldoDevedor(c)) + '</td>' +
+      '<td>' + div_dtbr(div_ultimoVenc(c)) + '</td><td style="text-align:right">' + (c.taxaJurosMes != null ? String(c.taxaJurosMes).replace('.', ',') + '%' : '—') + '</td><td>' + div_chip(st) + '</td>' +
+      '<td style="white-space:nowrap">' + (ed ? '<button class="btn btn-ghost btn-xs" onclick="div_form(\'' + c.id + '\')">✏️</button> <button class="rm-btn" onclick="div_excluir(\'' + c.id + '\')">×</button>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Nenhum contrato cadastrado.</td></tr>';
+  var tot = cs.reduce(function (s, c) { return s + div_saldoDevedor(c); }, 0);
+  var corpo = '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel)"><table class="dvt" style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="background:var(--bg2,#f1f5f9)"><th style="padding:6px 8px;text-align:left">Dívida</th><th style="text-align:left">Credor</th><th style="text-align:left">Origem</th><th style="text-align:right">Parcela</th><th>Pagas</th><th style="text-align:right">Saldo devedor</th><th style="text-align:left">Término</th><th style="text-align:right">Taxa/mês</th><th style="text-align:left">Status</th><th></th></tr></thead><tbody>' + linhas + '</tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:800"><td colspan="5" style="padding:6px 8px">Saldo devedor total</td><td style="text-align:right">' + div_brl(tot) + '</td><td colspan="4"></td></tr></tfoot></table></div>';
+  div_pagina('tab-div-contratos', '📄 Contratos de dívida', 'Cada dívida é cadastrada uma vez; o sistema gera as parcelas. Sem taxa informada, o saldo é a soma das parcelas restantes.', extra, corpo);
+}
+function renderDivParcelas() {
+  var mes = div_mes(), ed = div_podeEditar(), lista = [];
+  div_coll('dividas').forEach(function (c) { div_parcelasDe(c.id).forEach(function (p) { if (div_ym(p.vencimento) === mes) lista.push({ c: c, p: p }); }); });
+  lista.sort(function (a, b) { return a.p.vencimento.localeCompare(b.p.vencimento); });
+  var tot = 0, pago = 0;
+  var linhas = lista.map(function (x) {
+    var st = div_statusParcela(x.p), v = div_valorParcela(x.p); tot += v; if (x.p.dataPagamento) pago += v;
+    return '<tr style="border-top:1px solid var(--border);border-left:5px solid ' + DIV_STATUS_COR[st] + '"><td style="padding:6px 8px">' + div_dtbr(x.p.vencimento) + '</td><td><b>' + div_esc(x.c.descricao) + '</b><div style="font-size:11px;color:var(--muted)">' + div_esc(x.c.credor || '') + '</div></td>' +
+      '<td style="text-align:center">' + x.p.numero + '/' + x.c.qtdParcelas + '</td><td style="text-align:right">' + div_brl(v) + '</td><td>' + div_chip(st) + (x.p.dataPagamento ? ' <span style="font-size:11px;color:var(--muted)">' + div_dtbr(x.p.dataPagamento) + '</span>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + (!ed ? '' : (x.p.dataPagamento ? '<button class="btn btn-ghost btn-xs" onclick="div_baixaDesfazer(\'' + x.p.id + '\')">Desfazer</button>' : '<button class="btn btn-primary btn-xs" onclick="div_baixaAbrir(\'' + x.p.id + '\')">Pago</button>')) + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Nenhuma parcela vence neste mês.</td></tr>';
+  var extra = '<label style="font-size:11px;color:var(--muted);font-weight:600">Mês <input type="month" value="' + mes + '" onchange="div_setMes(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--panel);color:var(--text)"></label>';
+  var corpo = '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel)"><table class="dvt" style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="background:var(--bg2,#f1f5f9)"><th style="padding:6px 8px;text-align:left">Vencimento</th><th style="text-align:left">Dívida</th><th>Parcela</th><th style="text-align:right">Valor</th><th style="text-align:left">Situação</th><th></th></tr></thead><tbody>' + linhas + '</tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:800"><td colspan="3" style="padding:6px 8px">Total do mês</td><td style="text-align:right">' + div_brl(tot) + '</td><td colspan="2" style="color:var(--muted);font-weight:600">pago ' + div_brl(pago) + ' · falta ' + div_brl(tot - pago) + '</td></tr></tfoot></table></div>';
+  div_pagina('tab-div-parcelas', '📅 Parcelas do mês', 'Baixa rápida: clique em “Pago”, confira data e valor. Parcelamento da Selic pede o valor real do DARF.', extra, corpo);
+}
+function renderDivCronograma() {
+  var cs = div_coll('dividas'), ini = div_mesHoje(), N = 36, meses = [], i;
+  for (i = 0; i < N; i++) meses.push(div_addMesYM(ini, i));
+  var maxv = 1, dados = meses.map(function (m) {
+    var seg = cs.map(function (c, ci) { var v = 0; div_parcelasDe(c.id).forEach(function (p) { if (div_ym(p.vencimento) === m && !p.dataPagamento) v += +p.valorPrevisto || 0; }); return { v: v, cor: DIV_CORES[ci % DIV_CORES.length], nome: c.descricao }; });
+    var tot = seg.reduce(function (s, x) { return s + x.v; }, 0); maxv = Math.max(maxv, tot);
+    return { m: m, seg: seg, tot: tot };
+  });
+  var bars = dados.map(function (d) {
+    var alt = Math.round(d.tot / maxv * 150);
+    var pilha = d.seg.filter(function (x) { return x.v > 0; }).map(function (x) { return '<div title="' + div_esc(x.nome) + ': ' + div_brl(x.v) + '" style="height:' + Math.max(1, Math.round(x.v / maxv * 150)) + 'px;background:' + x.cor + '"></div>'; }).join('');
+    return '<div style="flex:1;min-width:18px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end"><div style="font-size:9px;color:var(--muted)">' + (d.tot ? Math.round(d.tot / 100) / 10 + 'k' : '') + '</div><div style="width:100%;display:flex;flex-direction:column-reverse;height:' + alt + 'px">' + pilha + '</div><div style="font-size:9px;color:var(--muted);margin-top:3px;transform:rotate(-60deg);white-space:nowrap">' + div_mesNome(d.m) + '</div></div>';
+  }).join('');
+  var legenda = cs.map(function (c, ci) { return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:11px"><span style="width:10px;height:10px;background:' + DIV_CORES[ci % DIV_CORES.length] + ';display:inline-block;border-radius:2px"></span>' + div_esc(c.descricao) + '</span>'; }).join('');
+  var marcos = cs.filter(function (c) { return div_statusContrato(c) !== 'QUITADA'; }).map(function (c) { return { c: c, fim: div_ultimoVenc(c) }; }).filter(function (x) { return x.fim; }).sort(function (a, b) { return a.fim.localeCompare(b.fim); }).map(function (x) {
+    var apos = div_addMesYM(div_ym(x.fim), 1), mm = div_totalMes(apos, true) / div_fatBase();
+    return '<li style="margin-bottom:4px"><b>' + div_mesNome(div_ym(x.fim)) + '</b> — ' + div_esc(x.c.descricao) + ' quitada · margem mínima a partir do mês seguinte (só com as parcelas já cadastradas): <b>' + (mm * 100).toFixed(1).replace('.', ',') + '%</b></li>';
+  }).join('') || '<li style="color:var(--muted)">Sem contratos ativos.</li>';
+  var corpo = '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px"><div style="display:flex;align-items:flex-end;gap:2px;height:210px;padding-bottom:34px">' + bars + '</div><div style="margin-top:8px">' + legenda + '</div></div>' +
+    '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-top:12px"><div style="font-weight:800;font-size:13px;margin-bottom:6px">Linha do tempo de quitação</div><ul style="font-size:12px;padding-left:18px">' + marcos + '</ul></div>';
+  div_pagina('tab-div-cronograma', '📉 Cronograma de quitação', 'Parcelas em aberto dos próximos 36 meses, uma cor por dívida. Passe o mouse na barra para ver o valor.', '', corpo);
+}
+
 // ── Importador de XML ───────────────────────────────────────────────────────
 var _fin2Imp = { kind: '', itens: [] };
 function fin2_txt(el, tag) { var n = el && el.getElementsByTagName(tag)[0]; return n ? (n.textContent || '').trim() : ''; }
@@ -18061,7 +18561,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-10-08T18:30:00Z';
+const APP_BUILD_VERSION = '2026-11-14T13:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -18836,6 +19336,8 @@ function buildSavePayload() {
     fin2Pagar: DB.fin2Pagar || [],
     fin2Guias: DB.fin2Guias || [],
     fin2Dividas: DB.fin2Dividas || [],
+    dividas: DB.dividas || [],
+    dividaParcelas: DB.dividaParcelas || [],
     fin2Fixas: DB.fin2Fixas || [],
     fin2Pessoas: DB.fin2Pessoas || [],
     fin2Param: DB.fin2Param || [],
@@ -19875,6 +20377,7 @@ function aplicarModulosNaNav() {
     var grp = tab.dataset.group;
     if (grp === 'fin') tab.style.display = (perms.fin && moduloAtivo('fin') && !moduloAtivo('cascata')) ? '' : 'none';
     else if (grp === 'cas') tab.style.display = (perms.fin && moduloAtivo('cascata')) ? '' : 'none';
+    else if (grp === 'div') tab.style.display = (perms.fin && moduloAtivo('div')) ? '' : 'none';
     else if (grp === 'alm') tab.style.display = (perms.alm && moduloAtivo('alm')) ? '' : 'none';
   });
 }
@@ -20119,6 +20622,7 @@ function applyPermissions(user) {
     if (grp==='conf')    tab.style.display = showConf     ? '' : 'none';
     else if (grp==='fin') tab.style.display = (perms.fin && moduloAtivo('fin') && !moduloAtivo('cascata'))   ? '' : 'none';
     else if (grp==='cas') tab.style.display = (perms.fin && moduloAtivo('cascata')) ? '' : 'none';
+    else if (grp==='div') tab.style.display = (perms.fin && moduloAtivo('div')) ? '' : 'none';
     else if (grp==='cad') tab.style.display = perms.cad   ? '' : 'none';
     else if (grp==='orc') tab.style.display = perms.orc   ? '' : 'none';
     else if (grp==='dash') tab.style.display = perms.dash!==false ? '' : 'none';
@@ -32523,13 +33027,14 @@ function renderModulosCard() {
   if (g('mod-fin')) g('mod-fin').checked = moduloAtivo('fin');
   if (g('mod-alm')) g('mod-alm').checked = moduloAtivo('alm');
   if (g('mod-cas')) g('mod-cas').checked = moduloAtivo('cascata');
+  if (g('mod-div')) g('mod-div').checked = moduloAtivo('div');
   if (g('mod-pc'))  g('mod-pc').checked  = moduloAtivo('pc');
 }
 function salvarModulos() {
   if (!currentUser || currentUser.perfil !== 'admin') { showToast('Só o administrador pode alterar os módulos.', 'warn'); return; }
   if (!DB.config) DB.config = {};
   var _casAntes = moduloAtivo('cascata');
-  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked, pc: !!(g('mod-pc') && g('mod-pc').checked), cascata: !!(g('mod-cas') && g('mod-cas').checked) };
+  DB.config.modulos = { fin: !!g('mod-fin').checked, alm: !!g('mod-alm').checked, pc: !!(g('mod-pc') && g('mod-pc').checked), cascata: !!(g('mod-cas') && g('mod-cas').checked), div: !!(g('mod-div') && g('mod-div').checked) };
   if (!_casAntes && DB.config.modulos.cascata && typeof fin2_limparFolhaAutoNaoPaga === 'function') {
     var _rm = fin2_limparFolhaAutoNaoPaga();
     if (_rm) showToast('🧹 ' + _rm + ' conta(s) de salário/encargos automáticas e não pagas foram removidas do Financeiro antigo.', 'warn');

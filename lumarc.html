@@ -7051,13 +7051,13 @@ function genOrcNum(peek) {
   // O contador vem SOMENTE de dados que sincronizam entre as máquinas
   // (config.orcSeq + orçamentos existentes). O contador antigo em
   // localStorage era por computador e fazia cada máquina numerar diferente.
-  var seq = parseInt(DB.config.orcSeq || 0) + 1;
+  var seq = 1;
   (DB.orcamentos || []).forEach(function(o) {
     var m = o.num ? String(o.num).match(/^ORC-\d{4}-(\d+)$/) : null;
     if (m) { var n = parseInt(m[1]); if (n >= seq) seq = n + 1; }
   });
   if (!peek) {
-    DB.config.orcSeq = seq;
+    DB.config.orcSeq = seq; // apenas informativo
   }
   return 'ORC-' + new Date().getFullYear() + '-' + String(seq).padStart(4,'0');
 }
@@ -7099,8 +7099,10 @@ async function orcPullNuvem() {
 }
 
 async function genOrcNumSeguro() {
+  // Só PROPÕE o próximo número (não consome). O número definitivo é o do
+  // momento em que o orçamento é salvo (ver salvarOrcamento).
   await orcPullNuvem();
-  return genOrcNum();
+  return genOrcNum(true);
 }
 
 // ── NUMERAÇÃO DE SOLICITAÇÕES DE ORÇAMENTO ──────────────────────────────────
@@ -9201,6 +9203,8 @@ function clearOrc(force) {
   _orcSolRef = null;
   ['o-num','o-data','o-resp','o-prazo','o-pgto','o-obs',
    'c-nome','c-cnpj','c-contato','c-tel','c-email','c-cidade'].forEach(id=>{ if(g(id)) g(id).value=''; });
+  if (g('o-status')) g('o-status').value = 'rascunho';
+  if (typeof toggleMotivoPerda === 'function') toggleMotivoPerda();
   orcItems = [];
   orcItemCount = 0;
   itemRowCounts = {};
@@ -18986,7 +18990,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-11-16T16:00:00Z';
+const APP_BUILD_VERSION = '2026-11-16T18:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -22696,7 +22700,7 @@ function salvarOrcamento() {
   ]).catch(function() {}).then(function() {
     var colide = (DB.orcamentos || []).some(function(o) { return o.num === num; });
     if (colide) {
-      var novo = genOrcNum();
+      var novo = genOrcNum(true);
       if (g('o-num')) g('o-num').value = novo;
       showToast('⚠️ O nº ' + num + ' já tinha sido usado por outro usuário. Seu orçamento foi salvo como ' + novo + '.', 'warn');
     }
@@ -23028,7 +23032,7 @@ async function duplicarOrcamento(id) {
     ]);
   } catch (e) {
     console.warn('[Duplicar] nuvem indisponível, usando numeração local:', e && e.message);
-    try { novoNum = genOrcNum(); } catch (e2) { showToast('Falha ao gerar número: ' + (e2.message||e2), 'error'); return; }
+    try { novoNum = genOrcNum(true); } catch (e2) { showToast('Falha ao gerar número: ' + (e2.message||e2), 'error'); return; }
   }
 
   var duplicarDe = function() {

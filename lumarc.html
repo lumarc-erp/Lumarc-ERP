@@ -7048,16 +7048,16 @@ function genOrcNum(peek) {
   // orçamento for limpo de novo antes de salvar) consuma uma numeração de
   // verdade, deixando saltos no sequencial.
   if (!DB.config) DB.config = {};
-  var lastSeq = parseInt(DB.config.orcSeq || 0);
-  var localSeq = parseInt(localStorage.getItem('lumarc_seq') || 0);
-  var seq = Math.max(lastSeq, localSeq) + 1;
+  // O contador vem SOMENTE de dados que sincronizam entre as máquinas
+  // (config.orcSeq + orçamentos existentes). O contador antigo em
+  // localStorage era por computador e fazia cada máquina numerar diferente.
+  var seq = parseInt(DB.config.orcSeq || 0) + 1;
   (DB.orcamentos || []).forEach(function(o) {
-    var m = o.num ? o.num.match(/(\d+)$/) : null;
+    var m = o.num ? String(o.num).match(/^ORC-\d{4}-(\d+)$/) : null;
     if (m) { var n = parseInt(m[1]); if (n >= seq) seq = n + 1; }
   });
   if (!peek) {
     DB.config.orcSeq = seq;
-    localStorage.setItem('lumarc_seq', seq);
   }
   return 'ORC-' + new Date().getFullYear() + '-' + String(seq).padStart(4,'0');
 }
@@ -7066,7 +7066,7 @@ function genOrcNum(peek) {
 // garantindo que o DB local tem os orçamentos mais recentes de AMBAS as
 // máquinas antes de incrementar o sequencial — elimina a colisão de números
 // quando dois usuários criam orçamentos simultaneamente.
-async function genOrcNumSeguro() {
+async function orcPullNuvem() {
   if (cloudCfg.apiKey) {
     try {
       var resp = await fetch(JSONBIN_BASE + '/b/' + cloudCfg.binId + '/latest', {
@@ -7096,6 +7096,10 @@ async function genOrcNumSeguro() {
       console.warn('[OrcNum] Pull pré-geração falhou, usando estado local:', e.message);
     }
   }
+}
+
+async function genOrcNumSeguro() {
+  await orcPullNuvem();
   return genOrcNum();
 }
 
@@ -18768,6 +18772,24 @@ async function rel_imprimir(jaEmitido) {
   setTimeout(function () { w.print(); }, 700);
 }
 
+// ── Diagnóstico de numeração duplicada de orçamentos ──
+function orcNumerosDuplicados() {
+  var cont = {};
+  (DB.orcamentos || []).forEach(function(o) { if (o.num) (cont[o.num] = cont[o.num] || []).push(o); });
+  return Object.keys(cont).filter(function(k) { return cont[k].length > 1; }).map(function(k) {
+    return { num: k, qtd: cont[k].length, clientes: cont[k].map(function(o) { return o.cliNome || '—'; }) };
+  });
+}
+setTimeout(function() {
+  try {
+    var d = orcNumerosDuplicados();
+    if (d.length && typeof showToast === 'function') {
+      console.warn('[Orçamentos] números repetidos:', d);
+      showToast('⚠️ ' + d.length + ' número(s) de orçamento repetido(s): ' + d.map(function(x) { return x.num; }).join(', ') + '. Nenhum dado foi alterado.', 'warn');
+    }
+  } catch (e) {}
+}, 8000);
+
 // ── Importador de XML ───────────────────────────────────────────────────────
 var _fin2Imp = { kind: '', itens: [] };
 function fin2_txt(el, tag) { var n = el && el.getElementsByTagName(tag)[0]; return n ? (n.textContent || '').trim() : ''; }
@@ -18964,7 +18986,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-11-16T14:00:00Z';
+const APP_BUILD_VERSION = '2026-11-16T16:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -22661,7 +22683,28 @@ function restaurarEstadoOrc(estado) {
 }
 
 // ---- SALVAR ORÇAMENTO NA LISTA ----
+// Antes de gravar um orçamento NOVO, confere na nuvem se alguém já usou esse
+// número; se sim, usa o próximo livre (nunca sobrescreve o orçamento do outro).
 function salvarOrcamento() {
+  var num = g('o-num') ? g('o-num').value.trim() : '';
+  var jaExiste = (DB.orcamentos || []).some(function(o) { return o.num === num; });
+  if (!num || jaExiste || !(typeof cloudCfg !== 'undefined' && cloudCfg.apiKey)) { return _salvarOrcamentoCore(); }
+  showToast('🔄 Conferindo numeração com a nuvem...', 'info');
+  return Promise.race([
+    orcPullNuvem(),
+    new Promise(function(resolve) { setTimeout(resolve, 6000); })
+  ]).catch(function() {}).then(function() {
+    var colide = (DB.orcamentos || []).some(function(o) { return o.num === num; });
+    if (colide) {
+      var novo = genOrcNum();
+      if (g('o-num')) g('o-num').value = novo;
+      showToast('⚠️ O nº ' + num + ' já tinha sido usado por outro usuário. Seu orçamento foi salvo como ' + novo + '.', 'warn');
+    }
+    return _salvarOrcamentoCore();
+  });
+}
+
+function _salvarOrcamentoCore() {
   var num = g('o-num') ? g('o-num').value : '';
   if (!num) { showToast('Informe o número do orçamento antes de salvar.', 'warn'); return; }
   syncOrcItemsFromDOM();

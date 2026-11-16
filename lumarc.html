@@ -1422,6 +1422,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
       <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="abrirPendTarde('os', (DB.editOSIdx>=0 && DB.ordens[DB.editOSIdx]) ? DB.ordens[DB.editOSIdx].id : '')">⚠️ Registrar pendência descoberta tarde <span id="mos-pt-count" style="color:var(--muted)"></span></button></div>
 
       <hr class="div">
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:10px"><input type="checkbox" id="mos-gera-rel" style="width:auto;flex:none"> <b>📋 Gera relatório técnico final</b> <span style="color:var(--muted);font-weight:400">(etapas com fotos, controle de qualidade e conclusão para entregar ao cliente)</span></label>
       <!-- FOTOS DA OS -->
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">📷 Fotos do Processo</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Fotos antes/durante/após o serviço, do defeito encontrado, ou da peça de referência.</div>
@@ -1465,6 +1466,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <div class="modal-footer" style="justify-content:space-between">
       <div style="display:flex;gap:8px">
         <button class="btn btn-green btn-sm" id="mos-pdf-btn" onclick="printOS()" style="display:none">📄 Imprimir OS</button>
+        <button class="btn btn-ghost btn-sm" id="mos-rel-btn" onclick="rel_abrirDaOS()" style="display:none">📋 Relatório técnico</button>
         <button class="btn btn-ghost btn-sm" id="mos-rec-btn" onclick="gerarReceberDaOS(DB.editOSIdx)" style="display:none" title="Gerar lançamento de recebimento para esta OS">💰 Gerar Recebimento</button>
       </div>
       <div style="display:flex;gap:8px">
@@ -1566,6 +1568,7 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 <div id="tab-div-contratos" class="tab-content"></div>
 <div id="tab-div-parcelas" class="tab-content"></div>
 <div id="tab-div-cronograma" class="tab-content"></div>
+<div id="tab-relatorios" class="tab-content"></div>
 
 <!-- ===================== TAB: FINANCEIRO DASHBOARD ===================== -->
 <div id="tab-fin-dash" class="tab-content">
@@ -1884,6 +1887,13 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         <div class="form-group full"><label>Observações</label>
           <input type="text" id="mpag-obs" placeholder="Notas adicionais">
         </div>
+        <div class="form-group full" id="mpag-recorrencia-wrap">
+          <label style="font-weight:600;cursor:pointer"><input type="checkbox" id="mpag-recorrente" onchange="toggleRecorrenciaPagar()"> Lançamento recorrente (gerar parcelas futuras)</label>
+          <div id="mpag-recorrencia-fields" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+            <div><label>Quantidade de parcelas</label><input type="number" id="mpag-rec-qtd" value="12" min="1" max="120"></div>
+            <div><label>Intervalo (dias)</label><input type="number" id="mpag-rec-intervalo" value="30" min="1"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1952,6 +1962,13 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         </div>
         <div class="form-group full"><label>Observações</label>
           <input type="text" id="mrec-obs">
+        </div>
+        <div class="form-group full" id="mrec-recorrencia-wrap">
+          <label style="font-weight:600;cursor:pointer"><input type="checkbox" id="mrec-recorrente" onchange="toggleRecorrenciaReceber()"> Lançamento recorrente (gerar parcelas futuras)</label>
+          <div id="mrec-recorrencia-fields" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+            <div><label>Quantidade de parcelas</label><input type="number" id="mrec-rec-qtd" value="12" min="1" max="120"></div>
+            <div><label>Intervalo (dias)</label><input type="number" id="mrec-rec-intervalo" value="30" min="1"></div>
+          </div>
         </div>
       </div>
       <!-- PREVIEW DISTRIBUIÇÃO -->
@@ -3023,8 +3040,18 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         </div>
         <div class="form-group">
           <label>Valor pago (R$)</label>
-          <input type="number" id="baixa-pagar-valor" step="0.01" min="0" placeholder="0,00"
+          <input type="number" id="baixa-pagar-valor" step="0.01" min="0" placeholder="0,00" oninput="checarDivergenciaPagar()"
                  style="font-family:var(--mono);font-weight:700;font-size:15px">
+          <input type="hidden" id="baixa-pagar-saldo-esperado" value="0">
+        </div>
+        <div class="form-group full" id="baixa-pagar-divergencia" style="display:none;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:10px">
+          <div id="baixa-pagar-divergencia-texto" style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:6px"></div>
+          <label style="display:block;font-size:12px;font-weight:400;cursor:pointer"><input type="radio" name="baixa-pagar-divergencia-acao" value="gerar" checked> Gerar novo lançamento com a diferença</label>
+          <label style="display:block;font-size:12px;font-weight:400;cursor:pointer"><input type="radio" name="baixa-pagar-divergencia-acao" value="ignorar"> Ignorar a diferença e considerar liquidado</label>
+        </div>
+        <div class="form-group full">
+          <label>Conta do plano <span style="color:var(--muted);font-weight:400">(opcional)</span></label>
+          <select id="baixa-pagar-plano"></select>
         </div>
         <div class="form-group full">
           <label>Caixa virtual de saída</label>
@@ -3119,8 +3146,18 @@ hr.div { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         </div>
         <div class="form-group">
           <label>Valor recebido (R$)</label>
-          <input type="number" id="baixa-receber-valor" step="0.01" min="0" placeholder="0,00"
+          <input type="number" id="baixa-receber-valor" step="0.01" min="0" placeholder="0,00" oninput="checarDivergenciaReceber()"
                  style="font-family:var(--mono);font-weight:700;font-size:15px">
+          <input type="hidden" id="baixa-receber-saldo-esperado" value="0">
+        </div>
+        <div class="form-group full" id="baixa-receber-divergencia" style="display:none;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:10px">
+          <div id="baixa-receber-divergencia-texto" style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:6px"></div>
+          <label style="display:block;font-size:12px;font-weight:400;cursor:pointer"><input type="radio" name="baixa-receber-divergencia-acao" value="gerar" checked> Gerar novo lançamento com a diferença</label>
+          <label style="display:block;font-size:12px;font-weight:400;cursor:pointer"><input type="radio" name="baixa-receber-divergencia-acao" value="ignorar"> Ignorar a diferença e considerar liquidado</label>
+        </div>
+        <div class="form-group full">
+          <label>Conta do plano <span style="color:var(--muted);font-weight:400">(opcional)</span></label>
+          <select id="baixa-receber-plano"></select>
         </div>
         <div class="form-group full">
           <label>Observação <span style="color:var(--muted);font-weight:400">(opcional)</span></label>
@@ -6878,6 +6915,7 @@ let DB = {
   fin2Dividas: [],
   dividas: [],
   dividaParcelas: [],
+  relatoriosOS: [],
   fin2Fixas: [],
   fin2Pessoas: [],
   fin2Param: [],
@@ -7822,7 +7860,6 @@ function confirmarRefazerLancamentosFolha() {
   gerarContasFolha();
 
   var depois = (DB.contasPagar||[]).length;
-  var criados = depois - (antesCount - (antesCount - DB.contasPagar.length));
 
   saveAll(true);
   closeModal('modal-refazer-folha');
@@ -8932,7 +8969,11 @@ function updateItemPricing(itemId) {
     const prevSug = parseFloat(pfEl.dataset.lastSug||0)||0;
     const neverEdited = !pfEl.dataset.userEdited;
     const stillOnSug  = prevSug > 0 && Math.abs(curVal - prevSug) < 0.01;
-    if (neverEdited || stillOnSug || curVal === 0) {
+    if (window._orcRestoring && (item.precoFinal||0) > 0) {
+      // Restaurando orçamento salvo: preserva o preço gravado (não recalcula)
+      pfEl.value = (item.precoFinal).toFixed(2);
+      if (Math.abs(item.precoFinal - pSug) > 0.01) pfEl.dataset.userEdited = '1';
+    } else if (neverEdited || stillOnSug || curVal === 0) {
       pfEl.value = pSug.toFixed(2);
       item.precoFinal = pSug;
     }
@@ -9366,41 +9407,26 @@ function sumItemTableDirect(itemId, type) {
 // gerando OS ao mesmo tempo em máquinas diferentes.
 // Formato: OS-{seq do orçamento}-{seq do item dentro do orçamento, 2 dígitos}
 function genOSNumDoOrc(orcNum, itemSeq) {
-  // Extrai a sequência numérica do orçamento (ex: ORC-2026-4891 → 4891)
-  var m = (orcNum || '').match(/(\d+)$/);
-  var orcSeq = m ? m[1] : null;
-  if (!orcSeq) return genOSNum(); // fallback se não há orçamento válido
-  var numBase = 'OS-' + orcSeq + '-' + String(itemSeq).padStart(2, '0');
-  // Garante que não colide com uma OS já existente com esse exato número
-  // (caso teórico de reprocessamento do mesmo orçamento)
-  var existe = (DB.ordens||[]).some(function(o){ return o.num === numBase; });
-  if (!existe) return numBase;
-  // Se já existe (ex: gerou de novo o mesmo orçamento), busca o próximo sufixo livre
-  var sufixo = itemSeq;
-  while ((DB.ordens||[]).some(function(o){ return o.num === ('OS-' + orcSeq + '-' + String(sufixo).padStart(2,'0')); })) {
-    sufixo++;
-  }
-  return 'OS-' + orcSeq + '-' + String(sufixo).padStart(2, '0');
+  // Numeração única e sequencial para TODAS as OS (manual, de orçamento ou de
+  // contrato): OS-AAAA-NNNN. O vínculo com o orçamento fica em os.orcRef.
+  return genOSNum();
 }
 
+var _osSeqMem = 0;
 function genOSNum() {
-  // Usado apenas para OS manual (sem orçamento de origem).
-  // Garante não-colisão verificando o número final contra DB.ordens.
   var year = new Date().getFullYear();
   var maxSeq = 0;
   (DB.ordens||[]).forEach(function(o) {
-    var m = (o.num||'').match(/OS-\d{4}-(\d+)$/);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1])||0);
+    var m = (o.num||'').match(/^OS-(20\d\d)-(\d+)$/);
+    if (m && parseInt(m[1]) === year) maxSeq = Math.max(maxSeq, parseInt(m[2])||0);
   });
-  var localSeq = parseInt(localStorage.getItem('lumarc_os_seq')||0);
-  var seq = Math.max(maxSeq, localSeq) + 1;
+  var seq = Math.max(maxSeq, _osSeqMem) + 1;
   var candidato = 'OS-' + year + '-' + String(seq).padStart(4,'0');
-  // Checagem final: se por algum motivo já existir (sync concorrente), avança
   while ((DB.ordens||[]).some(function(o){ return o.num === candidato; })) {
     seq++;
     candidato = 'OS-' + year + '-' + String(seq).padStart(4,'0');
   }
-  localStorage.setItem('lumarc_os_seq', seq);
+  _osSeqMem = seq;
   return candidato;
 }
 
@@ -9448,7 +9474,7 @@ function saveAll(silent) {
     config:        DB.config,
     tributario:    DB.tributario,
     folhaMensal:   DB.folhaMensal,
-    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, fin2Receber: DB.fin2Receber, fin2Pagar: DB.fin2Pagar, fin2Guias: DB.fin2Guias, fin2Dividas: DB.fin2Dividas, dividas: DB.dividas, dividaParcelas: DB.dividaParcelas, fin2Fixas: DB.fin2Fixas, fin2Pessoas: DB.fin2Pessoas, fin2Param: DB.fin2Param, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
+    orcamentos: DB.orcamentos, requisicoes: DB.requisicoes, solicitacoesOrc: DB.solicitacoesOrc, solFamilias: DB.solFamilias, fin2Receber: DB.fin2Receber, fin2Pagar: DB.fin2Pagar, fin2Guias: DB.fin2Guias, fin2Dividas: DB.fin2Dividas, dividas: DB.dividas, dividaParcelas: DB.dividaParcelas, relatoriosOS: DB.relatoriosOS, fin2Fixas: DB.fin2Fixas, fin2Pessoas: DB.fin2Pessoas, fin2Param: DB.fin2Param, solPerguntas: DB.solPerguntas, autonomias: DB.autonomias, caixasConfig: DB.caixasConfig, planoContas: DB.planoContas,
     transferenciasCaixa: DB.transferenciasCaixa || [],
     regrasClassificacaoCaixa: DB.regrasClassificacaoCaixa || null,
     nfAliases: DB.nfAliases || {},
@@ -9721,6 +9747,7 @@ function applyLoadedData(save, skipOrcData) {
   DB.fin2Dividas = mergeArrayByKey(DB.fin2Dividas, save.fin2Dividas, 'id');
   DB.dividas = mergeArrayByKey(DB.dividas, save.dividas, 'id');
   DB.dividaParcelas = mergeArrayByKey(DB.dividaParcelas, save.dividaParcelas, 'id');
+  DB.relatoriosOS = mergeArrayByKey(DB.relatoriosOS, save.relatoriosOS, 'id');
   DB.fin2Fixas = mergeArrayByKey(DB.fin2Fixas, save.fin2Fixas, 'id');
   DB.fin2Pessoas = mergeArrayByKey(DB.fin2Pessoas, save.fin2Pessoas, 'id');
   DB.fin2Param = mergeArrayByKey(DB.fin2Param, save.fin2Param, 'id');
@@ -9869,6 +9896,7 @@ const TAB_GROUPS = {
         { id:'tab-boletins',    label:'📏 Boletins de Medição' },
         { id:'tab-notas',       label:'🧾 Notas Fiscais' },
         { id:'tab-terceir',     label:'🔄 Terceirizações' },
+        { id:'tab-relatorios',  label:'📋 Relatórios Técnicos' },
       ]},
     ]
   },
@@ -10086,6 +10114,8 @@ async function buscarCNPJ(mode) {
 }
 
 
+var activeTabId = '', activeGroup = '';
+function previewDistribuicao() { /* reservado: a distribuição por caixa é exibida na baixa do recebimento */ }
 function switchGroup(groupId, mainTabEl) {
   // Update main tab highlight
   document.querySelectorAll('#main-tabs-bar .tab').forEach(t => t.classList.remove('active'));
@@ -10235,6 +10265,7 @@ function switchTab(tabId, subTabEl) {
     'tab-cas-fixas':     renderCasFixas,
     'tab-cas-dividas':   renderCasDividas,
     'tab-cas-param':     renderCasParam,
+    'tab-relatorios':     renderRelTecnicos,
     'tab-div-painel':     renderDivPainel,
     'tab-div-contratos':  renderDivContratos,
     'tab-div-parcelas':   renderDivParcelas,
@@ -11737,11 +11768,13 @@ function openOSModal(idx) {
     g('mos-obs-tec').value = os.obsTec || '';
     _renderObsTecLista();
     if (g('mos-ignora-exp')) g('mos-ignora-exp').checked = !!os.ignorarExpediente;
+    if (g('mos-gera-rel')) g('mos-gera-rel').checked = !!os.geraRelatorio;
     toggleIgnorarExpedienteOS();
     // Show history
     renderOSHistory(os.historico || []);
     g('mos-hist-area').style.display = (os.historico?.length > 0) ? '' : 'none';
     g('mos-pdf-btn').style.display = '';
+    if (g('mos-rel-btn')) g('mos-rel-btn').style.display = os.geraRelatorio ? '' : 'none';
     if (g('mos-pdf-prod-btn')) g('mos-pdf-prod-btn').style.display = '';
     if (g('mos-roteiro-btn')) g('mos-roteiro-btn').style.display = '';
     g('mos-rec-btn').style.display = '';
@@ -11771,9 +11804,11 @@ function openOSModal(idx) {
     g('mos-obs-tec').value = '';
     _renderObsTecLista();
     if (g('mos-ignora-exp')) g('mos-ignora-exp').checked = false;
+    if (g('mos-gera-rel')) g('mos-gera-rel').checked = false;
     toggleIgnorarExpedienteOS();
     g('mos-hist-area').style.display = 'none';
     g('mos-pdf-btn').style.display = 'none';
+    if (g('mos-rel-btn')) g('mos-rel-btn').style.display = 'none';
     if (g('mos-pdf-prod-btn')) g('mos-pdf-prod-btn').style.display = 'none';
     if (g('mos-roteiro-btn')) g('mos-roteiro-btn').style.display = 'none';
     g('mos-rec-btn').style.display = 'none';
@@ -11944,6 +11979,7 @@ function saveOS() {
     entrega: g('mos-entrega').value,
     obsTec: g('mos-obs-tec').value,
     ignorarExpediente: g('mos-ignora-exp') ? g('mos-ignora-exp').checked : false,
+    geraRelatorio: g('mos-gera-rel') ? g('mos-gera-rel').checked : false,
     historico,
     distTravada,
     // Etapa A fields
@@ -17592,7 +17628,7 @@ function fin2_toolbar(gid, titulo, sub, opts) {
 }
 function fin2_setMes(v) { if (v) { _fin2Mes = v; fin2_rerenderAtiva(); } }
 function fin2_setSoMes(b) { _fin2SoMes = !!b; fin2_rerenderAtiva(); }
-function fin2_rerenderAtiva() { if (typeof activeTabId !== 'undefined' && typeof switchTab === 'function') switchTab(activeTabId); }
+function fin2_rerenderAtiva() { if (activeTabId && typeof switchTab === 'function') switchTab(activeTabId); }
 
 // ── Telas ───────────────────────────────────────────────────────────────────
 function fin2_hostPrep(tabId, inner) {
@@ -17992,7 +18028,7 @@ function div_pmtPrice(PV, taxaPct, n, extra) {
 }
 
 // ── Consultas ───────────────────────────────────────────────────────────────
-function div_parcelasDe(idDiv) { return div_coll('dividaParcelas').filter(function (p) { return p.idDivida === idDiv; }).sort(function (a, b) { return a.numero - b.numero; }); }
+function div_parcelasDe(idDiv, todas) { return div_coll('dividaParcelas').filter(function (p) { return p.idDivida === idDiv && (todas || !p.cancelada); }).sort(function (a, b) { return a.numero - b.numero; }); }
 function div_statusParcela(p, hoje) {
   hoje = hoje || div_hoje();
   if (p.dataPagamento) return 'PAGA';
@@ -18023,7 +18059,6 @@ function div_saldoDevedor(c) {
 function div_totalMes(mes, soMargem) {
   var t = 0;
   div_coll('dividas').forEach(function (c) {
-    if (c.statusManual === 'RENEGOCIADA' && false) return;
     if (soMargem && c.entraNaMargemMinima === false) return;
     div_parcelasDe(c.id).forEach(function (p) { if (div_ym(p.vencimento) === mes) t += div_valorParcela(p); });
   });
@@ -18047,7 +18082,7 @@ function div_agora() { return new Date().toISOString(); }
 function div_idParc(idDiv, n) { return idDiv + '-p' + ('00' + n).slice(-3); }
 // Regrava o cronograma preservando parcelas pagas e as editadas à mão
 function div_aplicarCronograma(c, parcelasPagasInicio) {
-  var existentes = div_parcelasDe(c.id), gerado = div_gerar(c), mant = {};
+  var existentes = div_parcelasDe(c.id, true), gerado = div_gerar(c), mant = {};
   existentes.forEach(function (p) { if (p.dataPagamento || p.editadaManualmente) mant[p.numero] = p; });
   var colecao = div_coll('dividaParcelas');
   existentes.forEach(function (p) {
@@ -18121,11 +18156,11 @@ function div_baixaDesfazer(idParc) {
 
 // ── Formulário de contrato ──────────────────────────────────────────────────
 var _divForm = null;
-function div_form(id) {
+function div_form(id, preset) {
   if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
   var c = id ? div_coll('dividas').find(function (x) { return x.id === id; }) : null;
-  var d = c || { origem: DIV_ORIGENS[0].k, sistemaAmortizacao: DIV_ORIGENS[0].sis, debitoAutomatico: DIV_ORIGENS[0].deb, regraDiaUtil: 'MANTER', contaDebito: DIV_CONTAS[0], entraNaMargemMinima: true, dataContratacao: div_hoje(), diaVencimento: 10, qtdParcelas: 12, parcelasPagas: 0 };
-  _divForm = { id: id || null };
+  var d = c || Object.assign({ origem: DIV_ORIGENS[0].k, sistemaAmortizacao: DIV_ORIGENS[0].sis, debitoAutomatico: DIV_ORIGENS[0].deb, regraDiaUtil: 'MANTER', contaDebito: DIV_CONTAS[0], entraNaMargemMinima: true, dataContratacao: div_hoje(), diaVencimento: 10, qtdParcelas: 12, parcelasPagas: 0 }, preset || {});
+  _divForm = { id: id || null, renegocia: (preset && preset.substituiDivida) || null };
   var sel = function (idc, opts, val, pares) { return '<select id="' + idc + '" style="width:100%">' + opts.map(function (o) { var k = pares ? o[0] : o, l = pares ? o[1] : o; return '<option value="' + div_esc(k) + '"' + (k === val ? ' selected' : '') + '>' + div_esc(l) + '</option>'; }).join('') + '</select>'; };
   var inp = function (idc, val, tipo, ph) { return '<input id="' + idc + '" type="' + (tipo || 'text') + '" value="' + div_esc(val == null ? '' : val) + '" placeholder="' + (ph || '') + '" style="width:100%">'; };
   var lb = function (t, h) { return '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block">' + t + h + '</label>'; };
@@ -18219,7 +18254,12 @@ function div_salvarForm() {
   if (e.length) { g('dv-aviso').innerHTML = e.map(function (x) { return '<div style="color:#b91c1c">• ' + div_esc(x) + '</div>'; }).join(''); return; }
   var lista = div_coll('dividas'), ex = _divForm && _divForm.id ? lista.find(function (x) { return x.id === _divForm.id; }) : null;
   if (ex) { Object.assign(ex, c); ex.pendente = false; ex._updatedAt = div_agora(); c = ex; }
-  else { c.id = div_novoId(); c.status = 'ATIVA'; c._updatedAt = div_agora(); lista.push(c); }
+  else {
+    c.id = div_novoId(); c.status = 'ATIVA'; c._updatedAt = div_agora();
+    if (_divForm && _divForm.renegocia) c.substituiDivida = _divForm.renegocia;
+    lista.push(c);
+    if (_divForm && _divForm.renegocia) div_encerrar(_divForm.renegocia, 'RENEGOCIADA', null, 0);
+  }
   var pagas = ex ? 0 : Math.min(parseInt((g('dv-pagas') || {}).value, 10) || 0, c.qtdParcelas);
   div_aplicarCronograma(c, pagas);
   saveAll(true); fin2_fecharModal(); div_rerender();
@@ -18273,7 +18313,7 @@ function div_cargaInicial() {
 }
 
 // ── Telas ───────────────────────────────────────────────────────────────────
-function div_rerender() { if (typeof activeTabId !== 'undefined' && typeof switchTab === 'function') switchTab(activeTabId); }
+function div_rerender() { if (activeTabId && typeof switchTab === 'function') switchTab(activeTabId); }
 function div_setMes(v) { if (v) { _divMes = v; div_rerender(); } }
 function div_setFatBase(v) {
   if (!div_podeEditar()) return;
@@ -18306,9 +18346,10 @@ function renderDivPainel() {
     div_card('Saldo devedor total', div_brl(saldo), ativos.length + ' contrato(s) ativo(s)', '#dc2626') +
     div_card('Parcelas do mês', div_brl(div_totalMes(mes)), pagas + ' de ' + parcMes.length + ' pagas', '#f59e0b') +
     div_card('Curto prazo (12 meses)', div_brl(cl.curto), 'Longo prazo: ' + div_brl(cl.longo), '#2563eb') +
+    div_cardCobertura(mes) +
     div_card('Margem mínima atual', (mm * 100).toFixed(1).replace('.', ',') + '%', 'parcelas ÷ faturamento base de ' + div_brl(div_fatBase()), '#7c3aed') + '</div>';
   corpo += '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Faturamento base (conservador)</b> <input type="text" value="' + String(div_fatBase()).replace('.', ',') + '" ' + (div_podeEditar() ? '' : 'disabled') + ' onchange="div_setFatBase(this.value)" style="width:140px"> <span style="color:var(--muted)">Sugestão: média dos últimos 12 meses recebidos. Este número alimenta a margem mínima.</span></div>';
-  corpo += '<div style="font-size:11px;color:var(--muted);margin-top:10px">Cobertura do mês e alertas no topo entram na próxima fase.</div>';
+  corpo += div_painelCobertura(mes) + div_painelAlertas();
   div_pagina('tab-div-painel', '🏦 Dívidas — painel', 'Quanto a empresa deve, quanto vence neste mês e quanto cada serviço precisa deixar de margem para cobrir as parcelas.', '', corpo);
 }
 function renderDivContratos() {
@@ -18321,7 +18362,7 @@ function renderDivContratos() {
       '<td style="text-align:right">' + div_brl((ps.find(function (p) { return !p.dataPagamento; }) || ps[ps.length - 1] || {}).valorPrevisto) + '</td>' +
       '<td style="text-align:center">' + pagas + '/' + ps.length + '</td><td style="text-align:right">' + div_brl(div_saldoDevedor(c)) + '</td>' +
       '<td>' + div_dtbr(div_ultimoVenc(c)) + '</td><td style="text-align:right">' + (c.taxaJurosMes != null ? String(c.taxaJurosMes).replace('.', ',') + '%' : '—') + '</td><td>' + div_chip(st) + '</td>' +
-      '<td style="white-space:nowrap">' + (ed ? '<button class="btn btn-ghost btn-xs" onclick="div_form(\'' + c.id + '\')">✏️</button> <button class="rm-btn" onclick="div_excluir(\'' + c.id + '\')">×</button>' : '') + '</td></tr>';
+      '<td style="white-space:nowrap">' + (ed ? '<button class="btn btn-ghost btn-xs" onclick="div_form(\'' + c.id + '\')">✏️</button> ' + (st === 'QUITADA' || st === 'RENEGOCIADA' ? '' : '<button class="btn btn-ghost btn-xs" title="Quitar antecipadamente" onclick="div_quitarAbrir(\'' + c.id + '\')">💰</button> <button class="btn btn-ghost btn-xs" title="Renegociar" onclick="div_renegociar(\'' + c.id + '\')">🔁</button> ') + '<button class="rm-btn" onclick="div_excluir(\'' + c.id + '\')">×</button>' : '') + '</td></tr>';
   }).join('') || '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Nenhum contrato cadastrado.</td></tr>';
   var tot = cs.reduce(function (s, c) { return s + div_saldoDevedor(c); }, 0);
   var corpo = '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel)"><table class="dvt" style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="background:var(--bg2,#f1f5f9)"><th style="padding:6px 8px;text-align:left">Dívida</th><th style="text-align:left">Credor</th><th style="text-align:left">Origem</th><th style="text-align:right">Parcela</th><th>Pagas</th><th style="text-align:right">Saldo devedor</th><th style="text-align:left">Término</th><th style="text-align:right">Taxa/mês</th><th style="text-align:left">Status</th><th></th></tr></thead><tbody>' + linhas + '</tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:800"><td colspan="5" style="padding:6px 8px">Saldo devedor total</td><td style="text-align:right">' + div_brl(tot) + '</td><td colspan="4"></td></tr></tfoot></table></div>';
@@ -18363,6 +18404,368 @@ function renderDivCronograma() {
   var corpo = '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px"><div style="display:flex;align-items:flex-end;gap:2px;height:210px;padding-bottom:34px">' + bars + '</div><div style="margin-top:8px">' + legenda + '</div></div>' +
     '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-top:12px"><div style="font-weight:800;font-size:13px;margin-bottom:6px">Linha do tempo de quitação</div><ul style="font-size:12px;padding-left:18px">' + marcos + '</ul></div>';
   div_pagina('tab-div-cronograma', '📉 Cronograma de quitação', 'Parcelas em aberto dos próximos 36 meses, uma cor por dívida. Passe o mouse na barra para ver o valor.', '', corpo);
+}
+
+// ════════════════════════════ FASE 2 ════════════════════════════════════════
+// Encerramento (quitação antecipada / renegociação), cobertura mensal e alertas
+function div_encerrar(id, status, dt, valor) {
+  var c = div_coll('dividas').find(function (x) { return x.id === id; }); if (!c) return;
+  div_parcelasDe(id).forEach(function (p) { if (!p.dataPagamento) { p.cancelada = true; p._updatedAt = div_agora(); } });
+  c.statusManual = status; c.status = status; c.pendente = false; c._updatedAt = div_agora();
+  if (status === 'QUITADA') { c.dataQuitacao = dt; c.valorQuitacao = valor; }
+}
+function div_quitarAbrir(id) {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  var c = div_coll('dividas').find(function (x) { return x.id === id; }); if (!c) return;
+  var corpo = '<div style="padding:16px 18px;display:grid;gap:10px;font-size:13px"><div><b>' + div_esc(c.descricao) + '</b> · saldo devedor estimado ' + div_brl(div_saldoDevedor(c)) + '</div>' +
+    '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;font-size:12px">As parcelas em aberto serão canceladas e o contrato fica QUITADA. A margem mínima e o gráfico recalculam na hora.</div>' +
+    '<label>Data do pagamento<input type="date" id="dvq-data" value="' + div_hoje() + '" style="width:100%"></label>' +
+    '<label>Valor pago para quitar (R$)<input type="text" id="dvq-valor" value="' + String(div_saldoDevedor(c)).replace('.', ',') + '" style="width:100%"></label>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="fin2_fecharModal()">Cancelar</button><button class="btn btn-primary btn-sm" onclick="div_quitarSalvar(\'' + id + '\')">Quitar</button></div></div>';
+  fin2_modal('Quitar antecipadamente', corpo, 480);
+}
+function div_quitarSalvar(id) {
+  var dt = g('dvq-data').value, v = div_r2(div_num(g('dvq-valor').value));
+  if (!dt || !(v > 0)) { alert('Informe data e valor.'); return; }
+  div_encerrar(id, 'QUITADA', dt, v); saveAll(true); fin2_fecharModal(); div_rerender();
+  showToast('✅ Dívida quitada.');
+}
+function div_renegociar(id) {
+  if (!div_podeEditar()) { showToast('Só o administrador altera dívidas.', 'warn'); return; }
+  var c = div_coll('dividas').find(function (x) { return x.id === id; }); if (!c) return;
+  if (!confirm('Renegociar "' + c.descricao + '"? O contrato atual só será encerrado (RENEGOCIADA) quando você salvar o novo, que já vem com o saldo de ' + div_brl(div_saldoDevedor(c)) + ' como valor inicial.')) return;
+  div_form(null, { origem: 'Acordo / renegociação', sistemaAmortizacao: 'PARCELA_FIXA_INFORMADA', descricao: 'Renegociação — ' + c.descricao, credor: c.credor, valorContratado: div_saldoDevedor(c), finalidade: c.finalidade, contaDebito: c.contaDebito, substituiDivida: id, taxaJurosMes: undefined });
+}
+
+// Cobertura: margem gerada (campo manual na fase 1/2) ÷ parcelas do mês
+function div_margemGerada(ym) { var m = DB.config && DB.config.divMargemGerada; return m && m[ym] != null && m[ym] !== '' ? +m[ym] : null; }
+function div_setMargemGerada(ym, v) {
+  if (!div_podeEditar()) return;
+  if (!DB.config) DB.config = {}; if (!DB.config.divMargemGerada) DB.config.divMargemGerada = {};
+  if (String(v).trim() === '') delete DB.config.divMargemGerada[ym]; else DB.config.divMargemGerada[ym] = div_num(v);
+  DB.config._updatedAt = div_agora(); saveAll(true); div_rerender();
+  if (typeof updateTopbarAlerts === 'function') updateTopbarAlerts();
+}
+function div_cobertura(ym) {
+  var par = div_totalMes(ym, true), mg = div_margemGerada(ym);
+  if (mg == null || !(par > 0)) return { pct: null, sit: par > 0 ? 'Sem dado' : 'Sem parcelas', par: par, mg: mg };
+  var pct = mg / par;
+  return { pct: pct, sit: pct >= 1 ? 'Coberto' : (pct >= 0.7 ? 'Parcial' : 'Descoberto'), par: par, mg: mg };
+}
+var DIV_COB_COR = { 'Coberto': '#16a34a', 'Parcial': '#eab308', 'Descoberto': '#dc2626', 'Sem dado': '#94a3b8', 'Sem parcelas': '#94a3b8' };
+function div_cardCobertura(mes) {
+  var c = div_cobertura(mes);
+  return div_card('Cobertura do mês', c.pct == null ? c.sit : (c.pct * 100).toFixed(0) + '% · ' + c.sit, c.mg == null ? 'informe a margem gerada abaixo' : 'margem ' + div_brl(c.mg) + ' ÷ parcelas ' + div_brl(c.par), DIV_COB_COR[c.sit]);
+}
+function div_painelCobertura(mes) {
+  var ms = [], i, ed = div_podeEditar();
+  for (i = 11; i >= 0; i--) ms.push(div_addMesYM(mes, -i));
+  var max = 1; ms.forEach(function (m) { var c = div_cobertura(m); max = Math.max(max, c.par, c.mg || 0); });
+  var cols = ms.map(function (m) {
+    var c = div_cobertura(m), hp = Math.round(c.par / max * 90), hm = Math.round((c.mg || 0) / max * 90);
+    return '<div style="flex:1;min-width:52px;text-align:center"><div style="display:flex;align-items:flex-end;justify-content:center;gap:3px;height:96px"><div title="Parcelas: ' + div_brl(c.par) + '" style="width:14px;height:' + hp + 'px;background:#94a3b8;border-radius:3px 3px 0 0"></div><div title="Margem gerada: ' + div_brl(c.mg) + '" style="width:14px;height:' + hm + 'px;background:' + DIV_COB_COR[c.sit] + ';border-radius:3px 3px 0 0"></div></div>' +
+      '<div style="font-size:10px;color:var(--muted)">' + div_mesNome(m) + '</div><input type="text" ' + (ed ? '' : 'disabled') + ' value="' + (c.mg == null ? '' : String(c.mg).replace('.', ',')) + '" placeholder="margem" onchange="div_setMargemGerada(\'' + m + '\',this.value)" style="width:54px;font-size:10px;text-align:right"></div>';
+  }).join('');
+  return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px"><div style="font-weight:800;font-size:13px">Cobertura — últimos 12 meses</div><div style="font-size:11px;color:var(--muted);margin:2px 0 8px">Cinza = parcelas do mês · colorida = margem gerada pelos serviços faturados (valor − custo − impostos, até a margem mínima de cada um). Por enquanto você informa a margem gerada de cada mês; ela fica automática quando o custo por serviço estiver confiável no ERP. Verde ≥ 100% · amarelo 70–99% · vermelho &lt; 70%.</div><div style="display:flex;gap:4px;overflow:auto">' + cols + '</div></div>';
+}
+
+// Alertas
+function div_alertas() {
+  var a = [], hoje = div_hoje(), mes = div_mesHoje(), cs = div_coll('dividas');
+  cs.forEach(function (c) {
+    if (c.pendente) return;
+    div_parcelasDe(c.id).forEach(function (p) {
+      var st = div_statusParcela(p, hoje);
+      if (st === 'ATRASADA') a.push({ nivel: 'red', icon: '🔴', titulo: 'Parcela vencida: ' + c.descricao, desc: p.numero + '/' + c.qtdParcelas + ' venceu em ' + div_dtbr(p.vencimento) + ' — ' + div_brl(p.valorPrevisto), link: 'tab-div-parcelas' });
+      else if (st === 'VENCE_EM_7_DIAS') a.push({ nivel: p.vencimento === hoje ? 'red' : 'yellow', icon: p.vencimento === hoje ? '🔔' : '🟡', titulo: (p.vencimento === hoje ? 'Vence hoje: ' : 'Vence em até 7 dias: ') + c.descricao, desc: p.numero + '/' + c.qtdParcelas + ' em ' + div_dtbr(p.vencimento) + ' — ' + div_brl(p.valorPrevisto), link: 'tab-div-parcelas' });
+    });
+  });
+  var c1 = div_cobertura(mes), c0 = div_cobertura(div_addMesYM(mes, -1));
+  if (c1.sit === 'Descoberto' && c0.sit === 'Descoberto') a.push({ nivel: 'red', icon: '⚠️', titulo: 'Dois meses seguidos sem cobrir as dívidas', desc: 'Margem gerada abaixo de 70% das parcelas em ' + div_mesNome(div_addMesYM(mes, -1)) + ' e ' + div_mesNome(mes), link: 'tab-div-painel' });
+  if (c1.sit === 'Coberto') {
+    var ativos = cs.filter(function (c) { return !c.pendente && div_statusContrato(c) !== 'QUITADA' && c.statusManual !== 'RENEGOCIADA' && +c.taxaJurosMes > 0; }).sort(function (x, y) { return y.taxaJurosMes - x.taxaJurosMes; });
+    if (ativos.length) a.push({ nivel: 'info', icon: '💡', titulo: 'Há sobra de margem: quitar primeiro ' + ativos[0].descricao, desc: 'Maior taxa entre as dívidas (' + String(ativos[0].taxaJurosMes).replace('.', ',') + '% ao mês)', link: 'tab-div-contratos' });
+  }
+  if (cs.some(function (c) { return /Parcelamento fiscal/.test(c.origem || '') && div_statusContrato(c) !== 'QUITADA' && c.statusManual !== 'RENEGOCIADA'; }))
+    a.push({ nivel: 'info', icon: 'ℹ️', titulo: 'Parcelamento fiscal ativo', desc: 'Atraso no pagamento pode cancelar o parcelamento. Confirme o DARF do mês.', link: 'tab-div-parcelas' });
+  return a;
+}
+function div_painelAlertas() {
+  var al = div_alertas(), cor = { red: '#dc2626', yellow: '#eab308', info: '#2563eb' };
+  var h = al.length ? al.map(function (x) { return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-left:5px solid ' + cor[x.nivel] + ';background:var(--panel);border-radius:6px;margin-bottom:6px;font-size:12px"><span>' + x.icon + '</span><div><b>' + div_esc(x.titulo) + '</b><div style="color:var(--muted)">' + div_esc(x.desc) + '</div></div></div>'; }).join('') : '<div style="color:var(--muted);font-size:12px">Nenhum alerta ativo ✅</div>';
+  return '<div style="margin-top:12px"><div style="font-weight:800;font-size:13px;margin-bottom:6px">Alertas</div>' + h + '</div>';
+}
+// Topbar: só vencidas e vencendo (o resto fica no painel)
+function div_alertasTopbar() {
+  if (!div_ativo() || !(typeof currentUser !== 'undefined' && currentUser && currentUser.perfil === 'admin')) return [];
+  return div_alertas().filter(function (x) { return x.nivel !== 'info'; }).map(function (x) { return { icon: x.icon, titulo: x.titulo, desc: x.desc, link: x.link }; });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RELATÓRIO TÉCNICO FINAL (por OS) — só nas OS marcadas com "Gera relatório técnico final"
+// Coleção própria: relatoriosOS (um por OS). Lê fotos/dados da OS; não altera o fluxo de OS.
+// Honestidade técnica: a tabela de qualidade começa "Não informada" e o texto final
+// só afirma o que a tabela registra. É descritivo; não é laudo nem certificação.
+// ════════════════════════════════════════════════════════════════════════════
+var REL_SITUACOES = ['Realizada', 'Não realizada', 'Não informada'];
+var REL_NOTA_ESCOPO = 'Documento descritivo de execução. Não constitui laudo de integridade estrutural, qualificação de soldagem ou certificação de capacidade de carga ou torque.';
+var REL_MODELOS = {
+  eixo: { nome: 'Recuperação de eixo / componente (com soldagem)', solda: true,
+    etapas: [
+      ['Diagnóstico e preparação', 'Estado em que a peça chegou e o que foi removido/preparado. Não afirme causa raiz sem evidência.'],
+      ['Fabricação do componente / enxerto', 'O que foi fabricado ou usinado e como.'],
+      ['Montagem e união', 'Encaixe, posicionamento e regiões a unir.'],
+      ['Soldagem', 'Processo, consumível e regiões soldadas.'],
+      ['Recomposição e acabamento', 'Ligações recompostas e acabamentos realizados.'],
+      ['Aspecto do conjunto finalizado', 'Vista geral do conjunto ao final.']],
+    qual: ['Inspeção visual', 'Conferência dimensional / alinhamento', 'Pré-aquecimento', 'Consumível de soldagem', 'Ensaios não destrutivos', 'Material do componente original (certificado/análise)', 'Material do componente fabricado (grau do aço)', 'Capacidade de carga / torque admissível'] },
+  estrutura: { nome: 'Fabricação e montagem de estrutura metálica', solda: true,
+    etapas: [
+      ['Recebimento de materiais e preparação', ''], ['Corte e fabricação', ''], ['Montagem', ''], ['Soldagem', 'Processo, consumível e regiões soldadas.'],
+      ['Tratamento superficial / pintura', ''], ['Inspeção final e entrega', '']],
+    qual: ['Inspeção visual', 'Conferência dimensional', 'Pré-aquecimento', 'Consumível de soldagem', 'Ensaios não destrutivos', 'Certificado do material', 'Espessura de pintura / tratamento superficial'] },
+  usinagem: { nome: 'Usinagem / reforma de componente', solda: false,
+    etapas: [['Recebimento e inspeção inicial', ''], ['Usinagem', ''], ['Medição e conferência dimensional', ''], ['Acabamento', ''], ['Aspecto final', '']],
+    qual: ['Inspeção visual', 'Conferência dimensional', 'Rugosidade / acabamento superficial', 'Material (certificado ou identificação)'] },
+  branco: { nome: 'Em branco (monto as etapas)', solda: false, etapas: [['Etapa 1', ''], ['Aspecto final', '']], qual: ['Inspeção visual'] }
+};
+var _rel = null, _relOS = null;
+
+function rel_esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function rel_nl(s) { return rel_esc(s).replace(/\n/g, '<br>'); }
+function rel_id() { return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+function rel_dtbr(s) { if (!s) return '—'; var p = String(s).slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s; }
+function rel_coll() { if (!DB.relatoriosOS) DB.relatoriosOS = []; return DB.relatoriosOS; }
+function rel_doOS(osId) { return rel_coll().find(function (r) { return r.osId === osId; }) || null; }
+function rel_os(osId) { return (DB.ordens || []).find(function (o) { return o.id === osId; }) || null; }
+
+function rel_novo(os, modelo) {
+  var m = REL_MODELOS[modelo] || REL_MODELOS.branco;
+  return {
+    id: 'rel-' + os.id, osId: os.id, osNum: os.num, modelo: modelo, status: 'rascunho',
+    ficha: { equipamento: '', servico: os.desc || '', dimensoes: '', dataConclusao: os.entrega || '', responsavel: os.resp || '' },
+    solda: { houve: !!m.solda, processo: '', preaquecimento: 'Não informada', inspecao: '' },
+    etapas: m.etapas.map(function (e) { return { id: rel_id(), titulo: e[0], dica: e[1], texto: '', fotos: [] }; }),
+    qualidade: m.qual.map(function (q) { return { id: rel_id(), item: q, situacao: 'Não informada', obs: '' }; }),
+    avaliacao: '', conclusao: '', notaEscopo: REL_NOTA_ESCOPO, _updatedAt: new Date().toISOString()
+  };
+}
+
+// ── Texto sugerido (determinístico, sem afirmar além do que a tabela registra) ──
+function rel_pendencias(r) { return r.qualidade.filter(function (q) { return q.situacao !== 'Realizada'; }); }
+function rel_sugerirConclusao(r) {
+  var s = 'A LUMARC executou ' + (r.ficha.servico ? r.ficha.servico.replace(/\.$/, '') : 'o serviço descrito') + '. O serviço encontra-se concluído, conforme declaração da equipe executora. A documentação fotográfica registra etapas relevantes da execução, mas não constitui comprovação de resistência estrutural ou aptidão para carregamento específico.';
+  if (rel_pendencias(r).length) s += ' As verificações não realizadas ou não informadas constam na tabela de controle de qualidade.';
+  return s;
+}
+function rel_sugerirAvaliacao(r) {
+  var p = rel_pendencias(r);
+  if (!p.length) return '';
+  return 'Itens sem registro de verificação: ' + p.map(function (q) { return q.item.toLowerCase() + ' (' + q.situacao.toLowerCase() + ')'; }).join('; ') + '. A ausência desses registros deve permanecer expressamente informada: a inspeção visual não exclui defeitos internos não visíveis.';
+}
+var REL_SUPERLATIVOS = /\b(garant\w*|certific\w*|aprovad\w*|perfeit\w*|sem (qualquer )?defeito|capacidade comprovada|totalmente seguro)\b/i;
+function rel_trava(r) {
+  var av = [], txt = [r.conclusao].concat(r.etapas.map(function (e) { return e.texto; })).join(' ');
+  if (REL_SUPERLATIVOS.test(txt) && rel_pendencias(r).length) av.push('O texto usa termos como "garantia", "certificado" ou "aprovado", mas há itens de qualidade sem verificação realizada. O relatório não deve afirmar além do que foi verificado.');
+  if (!r.conclusao.trim()) av.push('A conclusão está vazia (use "Sugerir texto").');
+  if (!r.ficha.responsavel.trim()) av.push('Informe o responsável pela execução.');
+  if (!r.ficha.dataConclusao) av.push('Informe a data de conclusão.');
+  if (!r.etapas.some(function (e) { return e.fotos.length; })) av.push('Nenhuma etapa tem foto.');
+  if (r.solda.houve && !r.solda.processo.trim()) av.push('Houve soldagem: informe processo e consumível (ex.: SMAW / E7018).');
+  return av;
+}
+
+// ── Marcação na OS ──────────────────────────────────────────────────────────
+function rel_listaOS() {
+  return (DB.ordens || []).filter(function (o) { return o.geraRelatorio || rel_doOS(o.id); }).sort(function (a, b) { return String(b.num).localeCompare(String(a.num)); });
+}
+function renderRelTecnicos() {
+  var h = '<div style="padding:20px 24px 60px;max-width:1300px;margin:0 auto"><h2 style="font-size:16px;font-weight:800">📋 Relatórios técnicos finais</h2><p style="font-size:12px;color:var(--muted);margin:3px 0 14px">Aparecem aqui as OS marcadas com “Gera relatório técnico final” (caixa na própria OS). O relatório é descritivo: etapas com fotos legendadas, tabela do que foi e do que não foi verificado e conclusão em nome da Lumarc.</p>';
+  var lista = rel_listaOS();
+  if (!lista.length) h += '<div style="background:var(--panel);border:1px dashed var(--border);border-radius:10px;padding:24px;text-align:center;color:var(--muted)">Nenhuma OS marcada. Abra uma OS e marque <b>“Gera relatório técnico final”</b>.</div>';
+  else {
+    h += '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel)"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="background:var(--bg2,#f1f5f9)"><th style="padding:8px 10px;text-align:left">OS</th><th style="text-align:left">Cliente</th><th style="text-align:left">Serviço</th><th style="text-align:left">Status da OS</th><th style="text-align:left">Relatório</th><th></th></tr></thead><tbody>';
+    lista.forEach(function (o) {
+      var r = rel_doOS(o.id), st = !r ? ['Não iniciado', '#94a3b8'] : (r.status === 'emitido' ? ['Emitido', '#16a34a'] : ['Rascunho', '#eab308']);
+      h += '<tr style="border-top:1px solid var(--border)"><td style="padding:8px 10px"><b>' + rel_esc(o.num) + '</b></td><td>' + rel_esc(o.cliNome) + '</td><td style="max-width:380px">' + rel_esc((o.desc || '').slice(0, 110)) + '</td><td>' + rel_esc(o.status) + '</td>' +
+        '<td><span style="display:inline-block;padding:2px 9px;border-radius:99px;color:#fff;font-size:11px;font-weight:700;background:' + st[1] + '">' + st[0] + '</span>' + (r && r.emitidoEm ? ' <span style="font-size:11px;color:var(--muted)">' + rel_dtbr(r.emitidoEm) + '</span>' : '') + '</td>' +
+        '<td><button class="btn btn-primary btn-xs" onclick="rel_abrir(\'' + o.id + '\')">' + (r ? 'Abrir' : 'Iniciar') + '</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  var t = g('tab-relatorios'); if (t) t.innerHTML = h + '</div>';
+}
+function rel_abrirDaOS() {
+  var os = DB.editOSIdx >= 0 ? DB.ordens[DB.editOSIdx] : null;
+  if (!os) { alert('Salve a OS primeiro.'); return; }
+  if (!os.geraRelatorio) { alert('Marque “Gera relatório técnico final” nesta OS e salve.'); return; }
+  rel_abrir(os.id);
+}
+
+// ── Editor ──────────────────────────────────────────────────────────────────
+function rel_abrir(osId) {
+  var os = rel_os(osId); if (!os) return;
+  _relOS = os;
+  var ex = rel_doOS(osId);
+  if (ex) { _rel = JSON.parse(JSON.stringify(ex)); rel_editor(); return; }
+  var corpo = '<div style="padding:16px 18px;font-size:13px"><p style="margin-bottom:10px">Escolha o modelo de etapas para a OS <b>' + rel_esc(os.num) + '</b>. Você pode renomear, remover e acrescentar etapas depois.</p>' +
+    Object.keys(REL_MODELOS).map(function (k) { return '<button class="btn btn-ghost" style="display:block;width:100%;text-align:left;margin-bottom:8px" onclick="rel_criar(\'' + osId + '\',\'' + k + '\')"><b>' + rel_esc(REL_MODELOS[k].nome) + '</b><div style="font-size:11px;color:var(--muted)">' + REL_MODELOS[k].etapas.map(function (e) { return e[0]; }).join(' · ') + '</div></button>'; }).join('') + '</div>';
+  fin2_modal('Novo relatório técnico — OS ' + os.num, corpo, 640);
+}
+function rel_criar(osId, modelo) { _rel = rel_novo(rel_os(osId), modelo); _relOS = rel_os(osId); rel_editor(); }
+function rel_set(path, v) {
+  var p = path.split('.'), o = _rel;
+  for (var i = 0; i < p.length - 1; i++) o = o[p[i]];
+  o[p[p.length - 1]] = v;
+}
+function rel_setEtapa(id, campo, v) { var e = _rel.etapas.find(function (x) { return x.id === id; }); if (e) e[campo] = v; }
+function rel_setQual(id, campo, v) { var q = _rel.qualidade.find(function (x) { return x.id === id; }); if (q) q[campo] = v; }
+function rel_re() { var m = document.getElementById('f2-modal'), sc = m ? m.scrollTop : 0; rel_editor(); var n = document.getElementById('f2-modal'); if (n) n.scrollTop = sc; }
+function rel_addEtapa() { _rel.etapas.push({ id: rel_id(), titulo: 'Nova etapa', dica: '', texto: '', fotos: [] }); rel_re(); }
+function rel_delEtapa(id) { if (!confirm('Remover esta etapa?')) return; _rel.etapas = _rel.etapas.filter(function (e) { return e.id !== id; }); rel_re(); }
+function rel_moveEtapa(id, d) { var a = _rel.etapas, i = a.findIndex(function (e) { return e.id === id; }), j = i + d; if (i < 0 || j < 0 || j >= a.length) return; var t = a[i]; a[i] = a[j]; a[j] = t; rel_re(); }
+function rel_addQual() { _rel.qualidade.push({ id: rel_id(), item: 'Novo item', situacao: 'Não informada', obs: '' }); rel_re(); }
+function rel_delQual(id) { _rel.qualidade = _rel.qualidade.filter(function (q) { return q.id !== id; }); rel_re(); }
+function rel_toggleSolda(b) {
+  _rel.solda.houve = !!b;
+  if (b && !_rel.qualidade.some(function (q) { return /pré-aquecimento/i.test(q.item); })) {
+    ['Pré-aquecimento', 'Consumível de soldagem', 'Ensaios não destrutivos'].forEach(function (i) { _rel.qualidade.push({ id: rel_id(), item: i, situacao: 'Não informada', obs: '' }); });
+  }
+  rel_re();
+}
+function rel_fkey(ref, i) { return typeof ref === 'string' ? 'idx' + i : (ref.id || ref.name || 'idx' + i); }
+function rel_toggleFoto(etapaId, idx) {
+  var e = _rel.etapas.find(function (x) { return x.id === etapaId; }); if (!e) return;
+  var ref = (_relOS.fotos || [])[idx]; if (!ref) return;
+  var k = rel_fkey(ref, idx);
+  var i = e.fotos.findIndex(function (f) { return f.key === k; });
+  if (i >= 0) e.fotos.splice(i, 1); else e.fotos.push({ key: k, ref: ref, legenda: '' });
+  rel_re();
+}
+function rel_setLegenda(etapaId, key, v) { var e = _rel.etapas.find(function (x) { return x.id === etapaId; }); var f = e && e.fotos.find(function (z) { return z.key === key; }); if (f) f.legenda = v; }
+function rel_novaFoto(ev, etapaId) {
+  var files = Array.from(ev.target.files || []), pend = files.length;
+  if (!pend) return;
+  files.forEach(function (file) {
+    comprimirImagem(file, function (dataUrl) {
+      if (dataUrl) {
+        var ref = fotoStoreSalvar(dataUrl, file.name);
+        if (!_relOS.fotos) _relOS.fotos = [];
+        _relOS.fotos.push(ref); _relOS._updatedAt = new Date().toISOString();
+        var e = _rel.etapas.find(function (x) { return x.id === etapaId; });
+        if (e) e.fotos.push({ key: ref.id, ref: ref, legenda: '' });
+      }
+      if (--pend === 0) { saveAll(true); rel_re(); }
+    });
+  });
+}
+function rel_sugerirTextos() {
+  _rel.conclusao = rel_sugerirConclusao(_rel);
+  _rel.avaliacao = rel_sugerirAvaliacao(_rel);
+  rel_re();
+}
+function rel_editor() {
+  var r = _rel, os = _relOS, ip = function (path, val, ph, tipo) { return '<input type="' + (tipo || 'text') + '" value="' + rel_esc(val) + '" placeholder="' + (ph || '') + '" oninput="rel_set(\'' + path + '\',this.value)" style="width:100%">'; };
+  var lb = function (t, x) { return '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block">' + t + x + '</label>'; };
+  var sec = function (t) { return '<div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted);margin:16px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px">' + t + '</div>'; };
+  var h = '<div style="padding:14px 18px 20px;font-size:13px">' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">OS <b>' + rel_esc(os.num) + '</b> · ' + rel_esc(os.cliNome) + ' · modelo: ' + rel_esc((REL_MODELOS[r.modelo] || {}).nome || '') + ' · <b>' + (r.status === 'emitido' ? 'Emitido' : 'Rascunho') + '</b></div>' +
+    sec('Ficha do equipamento e do serviço') + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">' +
+    lb('Equipamento', ip('ficha.equipamento', r.ficha.equipamento, 'Ex.: Trado helicoidal para perfuração')) +
+    lb('Serviço', ip('ficha.servico', r.ficha.servico, 'Ex.: Recuperação localizada do eixo')) +
+    lb('Dimensões / dados nominais', ip('ficha.dimensoes', r.ficha.dimensoes, 'Ex.: Ø800 mm; passo 380 mm')) +
+    lb('Data de conclusão', ip('ficha.dataConclusao', r.ficha.dataConclusao, '', 'date')) +
+    lb('Responsável pela execução', ip('ficha.responsavel', r.ficha.responsavel)) + '</div>' +
+    '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:12px"><input type="checkbox" style="width:auto;flex:none" ' + (r.solda.houve ? 'checked' : '') + ' onchange="rel_toggleSolda(this.checked)"> <b>Houve soldagem neste serviço</b> (abre os campos de processo e inclui os itens de controle correspondentes)</label>';
+  if (r.solda.houve) h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:8px;background:var(--bg2,#f1f5f9);border-radius:8px;padding:10px">' +
+    lb('Processo / consumível', ip('solda.processo', r.solda.processo, 'Ex.: SMAW / E7018')) +
+    lb('Pré-aquecimento', '<select onchange="rel_set(\'solda.preaquecimento\',this.value)" style="width:100%">' + ['Realizado', 'Não realizado', 'Não informada'].map(function (o) { return '<option' + (o === r.solda.preaquecimento ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>') +
+    lb('Inspeção feita', ip('solda.inspecao', r.solda.inspecao, 'Ex.: somente visual')) + '</div>';
+  h += sec('Etapas da execução (com fotos legendadas)');
+  r.etapas.forEach(function (e, n) {
+    var fotos = (os.fotos || []);
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--panel)">' +
+      '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="min-width:22px">' + ('0' + (n + 1)).slice(-2) + '</b><input type="text" value="' + rel_esc(e.titulo) + '" oninput="rel_setEtapa(\'' + e.id + '\',\'titulo\',this.value)" style="flex:1;font-weight:700">' +
+      '<button class="btn btn-ghost btn-xs" onclick="rel_moveEtapa(\'' + e.id + '\',-1)">↑</button><button class="btn btn-ghost btn-xs" onclick="rel_moveEtapa(\'' + e.id + '\',1)">↓</button><button class="rm-btn" onclick="rel_delEtapa(\'' + e.id + '\')">×</button></div>' +
+      '<textarea rows="3" placeholder="' + rel_esc(e.dica || 'Descreva o que foi feito nesta etapa.') + '" oninput="rel_setEtapa(\'' + e.id + '\',\'texto\',this.value)" style="width:100%">' + rel_esc(e.texto) + '</textarea>' +
+      '<div style="font-size:11px;color:var(--muted);margin:6px 0 4px">Clique nas fotos da OS para incluir/retirar desta etapa:</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' +
+      fotos.map(function (f, i) { var k = rel_fkey(f, i), on = e.fotos.some(function (z) { return z.key === k; });
+        return '<div onclick="rel_toggleFoto(\'' + e.id + '\',' + i + ')" style="width:64px;height:64px;border-radius:6px;overflow:hidden;cursor:pointer;border:3px solid ' + (on ? '#2563eb' : 'transparent') + ';opacity:' + (on ? 1 : .6) + '">' + htmlFotoTag(f, 'width:100%;height:100%;object-fit:cover', '') + '</div>'; }).join('') +
+      '<label class="btn btn-ghost btn-xs" style="cursor:pointer">+ Nova foto<input type="file" accept="image/*" multiple style="display:none" onchange="rel_novaFoto(event,\'' + e.id + '\')"></label></div>' +
+      (e.fotos.length ? '<div style="margin-top:8px;display:grid;gap:4px">' + e.fotos.map(function (f) { return '<div style="display:flex;gap:6px;align-items:center"><div style="width:34px;height:34px;border-radius:4px;overflow:hidden;flex:none">' + htmlFotoTag(f.ref, 'width:100%;height:100%;object-fit:cover', '') + '</div><input type="text" placeholder="Legenda da foto" value="' + rel_esc(f.legenda) + '" oninput="rel_setLegenda(\'' + e.id + '\',\'' + rel_esc(f.key) + '\',this.value)" style="flex:1;font-size:12px"></div>'; }).join('') + '</div>' : '') + '</div>';
+  });
+  h += '<button class="btn btn-ghost btn-sm" onclick="rel_addEtapa()">+ Etapa</button>';
+  h += sec('Controle de qualidade — o que foi e o que não foi verificado') +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tudo começa como “Não informada”. Só marque “Realizada” quando houve a verificação, e descreva critério/medição na observação.</div>' +
+    r.qualidade.map(function (q) { return '<div style="display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:6px;margin-bottom:6px"><input type="text" value="' + rel_esc(q.item) + '" oninput="rel_setQual(\'' + q.id + '\',\'item\',this.value)"><select onchange="rel_setQual(\'' + q.id + '\',\'situacao\',this.value)">' + REL_SITUACOES.map(function (o) { return '<option' + (o === q.situacao ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select><input type="text" placeholder="Observação (critério, medição)" value="' + rel_esc(q.obs) + '" oninput="rel_setQual(\'' + q.id + '\',\'obs\',this.value)"><button class="rm-btn" onclick="rel_delQual(\'' + q.id + '\')">×</button></div>'; }).join('') +
+    '<button class="btn btn-ghost btn-sm" onclick="rel_addQual()">+ Item</button>';
+  h += sec('Avaliação e conclusão') + '<div style="margin-bottom:6px"><button class="btn btn-ghost btn-sm" onclick="rel_sugerirTextos()">✨ Sugerir texto a partir da tabela</button> <span style="font-size:11px;color:var(--muted)">substitui a avaliação e a conclusão atuais</span></div>' +
+    lb('Avaliação / limitações', '<textarea rows="4" oninput="rel_set(\'avaliacao\',this.value)" style="width:100%">' + rel_esc(r.avaliacao) + '</textarea>') +
+    '<div style="height:8px"></div>' + lb('Conclusão (fala em nome da Lumarc)', '<textarea rows="4" oninput="rel_set(\'conclusao\',this.value)" style="width:100%">' + rel_esc(r.conclusao) + '</textarea>') +
+    '<div style="height:8px"></div>' + lb('Nota de escopo (aparece na capa)', '<textarea rows="2" oninput="rel_set(\'notaEscopo\',this.value)" style="width:100%">' + rel_esc(r.notaEscopo) + '</textarea>');
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px;position:sticky;bottom:0;background:var(--panel);padding:10px 0;border-top:1px solid var(--border)"><button class="btn btn-ghost btn-sm" onclick="fin2_fecharModal()">Fechar</button><button class="btn btn-ghost btn-sm" onclick="rel_salvar(true)">💾 Salvar rascunho</button><button class="btn btn-ghost btn-sm" onclick="rel_imprimir(false)">👁️ Visualizar / PDF</button><button class="btn btn-primary btn-sm" onclick="rel_emitir()">📤 Emitir relatório</button></div></div>';
+  fin2_modal('📋 Relatório técnico final — OS ' + os.num, h, 980);
+  var m = document.getElementById('f2-modal'); if (m && typeof hidratarFotosLazy === 'function') hidratarFotosLazy(m);
+}
+
+// ── Gravação / emissão ──────────────────────────────────────────────────────
+function rel_salvar(avisar) {
+  _rel._updatedAt = new Date().toISOString();
+  var a = rel_coll(), i = a.findIndex(function (x) { return x.id === _rel.id; });
+  var cp = JSON.parse(JSON.stringify(_rel));
+  if (i >= 0) a[i] = cp; else a.push(cp);
+  saveAll(true);
+  if (avisar) showToast('💾 Relatório salvo.');
+}
+function rel_emitir() {
+  var av = rel_trava(_rel);
+  if (av.length && !confirm('Antes de emitir, confira:\n\n• ' + av.join('\n• ') + '\n\nEmitir mesmo assim?')) return;
+  _rel.status = 'emitido'; _rel.emitidoEm = new Date().toISOString().slice(0, 10);
+  rel_salvar(false);
+  if (!DB.documentosOS) DB.documentosOS = [];
+  var did = 'doc-rel-' + _rel.osId;
+  if (!DB.documentosOS.some(function (d) { return d.id === did; })) {
+    DB.documentosOS.push({ id: did, osNum: _relOS.num, tipo: 'rel', nome: 'Relatório técnico final — OS ' + _relOS.num, data: _rel.emitidoEm, obs: 'Emitido no ERP (aba Relatórios técnicos). Reimprima de lá.', tamanho: '', criadoEm: new Date().toLocaleString('pt-BR'), dados: null, _updatedAt: new Date().toISOString() });
+    saveAll(true);
+  }
+  rel_imprimir(true);
+  if (typeof renderRelTecnicos === 'function') renderRelTecnicos();
+}
+function rel_html(r, os) {
+  var emp = (typeof getPDFCompanyHTML === 'function') ? getPDFCompanyHTML() : { sub: '' };
+  var pend = rel_pendencias(r), fi = r.ficha;
+  var linhaStatus = 'Status informado: serviço concluído.' + (r.solda.houve ? ' Processo de soldagem: ' + (r.solda.processo || 'não informado') + '. Pré-aquecimento: ' + r.solda.preaquecimento.toLowerCase().replace('informada', 'informado') + '.' : '') + (r.solda.inspecao ? ' Inspeção: ' + r.solda.inspecao + '.' : '');
+  var ficha = [['Equipamento', fi.equipamento], ['Serviço', fi.servico], ['Dimensões nominais', fi.dimensoes], ['Cliente / OS', (os.cliNome || '') + ' / ' + os.num], ['Data de conclusão', rel_dtbr(fi.dataConclusao)], ['Responsável pela execução', fi.responsavel]].filter(function (x) { return x[1] && x[1] !== '—'; });
+  var css = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#1C2333;line-height:1.5}.page{max-width:780px;margin:0 auto;padding:26px}' +
+    '.hdr{border-bottom:3px solid #1C2333;padding-bottom:10px;margin-bottom:18px}.tit{font-size:20px;font-weight:800;margin-top:14px}.sub{color:#64748B;margin-top:4px}' +
+    'table{width:100%;border-collapse:collapse;margin:10px 0}td,th{padding:6px 8px;border-bottom:1px solid #E2E8F0;text-align:left;vertical-align:top}th{background:#1C2333;color:#fff;font-size:10px;text-transform:uppercase}td.k{width:32%;font-weight:700;color:#475569;background:#F8FAFC}' +
+    '.sec{font-size:13px;font-weight:800;margin:20px 0 6px;padding:4px 10px;border-left:4px solid #1C2333;background:#F1F5F9;page-break-after:avoid}.etapa{page-break-inside:avoid}.fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}.fotos img,.fotos div.ph{width:100%;height:190px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px}.leg{font-size:10px;color:#64748B;margin-top:3px;text-align:center}' +
+    '.box{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px 12px;margin:8px 0}.nota{font-size:10px;color:#64748B;border-top:1px solid #E2E8F0;margin-top:14px;padding-top:6px}.assin{margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:30px}.assin div{border-top:1px solid #1C2333;padding-top:6px;font-size:10.5px}' +
+    '.sit-R{color:#15803d;font-weight:700}.sit-N{color:#b91c1c;font-weight:700}.sit-I{color:#92400e;font-weight:700}.foot{margin-top:22px;border-top:1px solid #E2E8F0;padding-top:8px;text-align:center;font-size:9.5px;color:#94A3B8}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}';
+  var h = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório técnico final — OS ' + rel_esc(os.num) + '</title><style>' + css + '</style></head><body><div class="page">' +
+    '<div class="hdr">' + ((typeof getPDFLogoHTML === 'function') ? getPDFLogoHTML() : '<b>LUMARC</b>') + '<div style="color:#64748B;font-size:10px">' + (emp.sub || '') + '</div><div class="tit">RELATÓRIO TÉCNICO FINAL</div><div class="sub">' + rel_esc(fi.servico || '') + '. Registro de execução, evidências fotográficas e condições de inspeção.</div></div>' +
+    '<table>' + ficha.map(function (x) { return '<tr><td class="k">' + x[0] + '</td><td>' + rel_esc(x[1]) + '</td></tr>'; }).join('') + '</table>' +
+    '<div class="box">' + rel_esc(linhaStatus) + '</div><div class="nota" style="border:0;margin-top:4px"><b>Nota de escopo:</b> ' + rel_esc(r.notaEscopo) + '</div>';
+  var etp = r.etapas.filter(function (e) { return e.texto.trim() || e.fotos.length; });
+  etp.forEach(function (e, n) {
+    h += '<div class="etapa"><div class="sec">' + ('0' + (n + 1)).slice(-2) + ' | ' + rel_esc(e.titulo.toUpperCase()) + '</div>' + (e.texto ? '<p>' + rel_nl(e.texto) + '</p>' : '') +
+      (e.fotos.length ? '<div class="fotos">' + e.fotos.map(function (f) { return '<div>' + htmlFotoDoc(f.ref, 'width:100%;height:190px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px') + (f.legenda ? '<div class="leg">' + rel_esc(f.legenda) + '</div>' : '') + '</div>'; }).join('') + '</div>' : '') + '</div>';
+  });
+  h += '<div class="etapa"><div class="sec">' + ('0' + (etp.length + 1)).slice(-2) + ' | CONTROLE DE QUALIDADE E LIMITAÇÕES</div><table><thead><tr><th>Verificação</th><th>Situação</th><th>Registro</th></tr></thead><tbody>' +
+    r.qualidade.map(function (q) { var c = q.situacao === 'Realizada' ? 'R' : (q.situacao === 'Não realizada' ? 'N' : 'I'); return '<tr><td class="k">' + rel_esc(q.item) + '</td><td class="sit-' + c + '">' + q.situacao + '</td><td>' + rel_esc(q.obs || (c === 'I' ? 'Critérios e medições não fornecidos.' : '')) + '</td></tr>'; }).join('') + '</tbody></table>' +
+    (r.avaliacao.trim() ? '<div class="box"><b>AVALIAÇÃO DE CAPACIDADE E LIMITAÇÕES</b><br>' + rel_nl(r.avaliacao) + '</div>' : '') + '</div>';
+  h += '<div class="etapa"><div class="sec">' + ('0' + (etp.length + 2)).slice(-2) + ' | CONCLUSÃO</div><p>' + rel_nl(r.conclusao) + '</p></div>' +
+    '<div class="assin"><div>Responsável pela execução: ' + rel_esc(fi.responsavel || '') + '</div><div>Data: ' + rel_dtbr(fi.dataConclusao) + ' · OS: ' + rel_esc(os.num) + '</div></div>' +
+    '<div class="foot">LUMARC | Relatório técnico de execução | Uso do cliente</div></div></body></html>';
+  return h;
+}
+async function rel_imprimir(jaEmitido) {
+  if (!_rel) return;
+  try { await garantirFotosCarregadas(); } catch (e) {}
+  var w = window.open('', '_blank');
+  if (!w) { alert('O navegador bloqueou a janela. Permita pop-ups para este endereço.'); return; }
+  w.document.write(rel_html(_rel, _relOS)); w.document.close();
+  setTimeout(function () { w.print(); }, 700);
 }
 
 // ── Importador de XML ───────────────────────────────────────────────────────
@@ -18561,7 +18964,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-11-14T13:00:00Z';
+const APP_BUILD_VERSION = '2026-11-16T14:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -19338,6 +19741,7 @@ function buildSavePayload() {
     fin2Dividas: DB.fin2Dividas || [],
     dividas: DB.dividas || [],
     dividaParcelas: DB.dividaParcelas || [],
+    relatoriosOS: DB.relatoriosOS || [],
     fin2Fixas: DB.fin2Fixas || [],
     fin2Pessoas: DB.fin2Pessoas || [],
     fin2Param: DB.fin2Param || [],
@@ -22231,9 +22635,12 @@ function restaurarEstadoOrc(estado) {
   if (lista) lista.innerHTML = '';
   if (g('itens-empty-msg')) g('itens-empty-msg').style.display = '';
   var items = estado.orcItems || [];
+  window._orcRestoring = true;
+  try {
   if (items.length) {
     g('itens-empty-msg').style.display = 'none';
     items.forEach(function(item) {
+      item = JSON.parse(JSON.stringify(item)); // cópia: não compartilhar objeto com o estado salvo
       orcItems.push(item);
       renderItemCard(item, false);
       // renderItemCard already renders all table rows from item.mp/mo/maq/da
@@ -22246,6 +22653,7 @@ function restaurarEstadoOrc(estado) {
   // Recalc
   rebuildSelects();
   recalcAllItems();
+  } finally { window._orcRestoring = false; }
   // Don't mark dirty during restore — this is a load, not a user edit
   // updStatus() calls markOrcDirty, so we clear after
   updStatus();
@@ -22327,6 +22735,7 @@ function salvarOrcamento() {
   }
   if (typeof renderOrcamentosTab === 'function') renderOrcamentosTab();
   localStorage.removeItem('lumarc_rascunho_autosave');
+  clearOrcDirty();
 }
 
 
@@ -22565,20 +22974,35 @@ function abrirOrcamento(id) {
 // ---- DUPLICAR ORÇAMENTO ----
 async function duplicarOrcamento(id) {
   var orc = DB.orcamentos.find(function(o) { return o.id === id; });
-  if (!orc) return;
-  showToast('🔄 Verificando numeração com a nuvem...', 'info');
-  var novoNum = await genOrcNumSeguro();
+  if (!orc) { showToast('Orçamento não encontrado.', 'warn'); return; }
+  if (!orc.estado) { showToast('Este orçamento não tem dados completos para duplicar (abra e salve-o uma vez).', 'warn'); return; }
+  showToast('🔄 Gerando novo número...', 'info');
+  var novoNum;
+  try {
+    novoNum = await Promise.race([
+      genOrcNumSeguro(),
+      new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 6000); })
+    ]);
+  } catch (e) {
+    console.warn('[Duplicar] nuvem indisponível, usando numeração local:', e && e.message);
+    try { novoNum = genOrcNum(); } catch (e2) { showToast('Falha ao gerar número: ' + (e2.message||e2), 'error'); return; }
+  }
 
   var duplicarDe = function() {
-    clearOrcDirty();
-    goToTab('tab-orc');
-    setTimeout(function() {
-      restaurarEstadoOrc(orc.estado);
-      if (g('o-num')) g('o-num').value = novoNum;
-      if (g('o-status')) g('o-status').value = 'rascunho';
-      updStatus && updStatus();
-      showToast('📋 Orçamento duplicado — novo nº ' + novoNum);
-    }, 120);
+    try {
+      clearOrcDirty();
+      goToTab('tab-orc');
+      setTimeout(function() {
+        try {
+          try { _orcSolRef = null; } catch(e) {}
+          restaurarEstadoOrc(JSON.parse(JSON.stringify(orc.estado)));
+          if (g('o-num')) g('o-num').value = novoNum;
+          if (g('o-status')) g('o-status').value = 'rascunho';
+          updStatus && updStatus();
+          showToast('📋 Orçamento duplicado — novo nº ' + novoNum);
+        } catch (e) { console.error(e); showToast('Erro ao duplicar: ' + (e.message||e), 'error'); }
+      }, 120);
+    } catch (e) { console.error(e); showToast('Erro ao duplicar: ' + (e.message||e), 'error'); }
   };
 
   if (hasUnsavedOrc()) {
@@ -24835,7 +25259,7 @@ function preencherItensRCdoOrc(orcItems, os, engRevisao) {
     }
   });
 
-  atualizarTotalRC();
+  if (typeof calcRCTotal === 'function') calcRCTotal();
   var total_novos = itensCompra.filter(function(i){ return !i.jaRequisitado; }).length;
   var total_repet = itensCompra.filter(function(i){ return  i.jaRequisitado; }).length;
   showToast('✅ ' + itensCompra.length + ' item(s) importados'
@@ -31762,7 +32186,7 @@ function gerarOSdoContrato(contId) {
   if (!cont) return;
   if (!confirm('Gerar uma nova OS vinculada ao contrato "'+cont.num+'"?')) return;
   if (!DB.ordens) DB.ordens=[];
-  var num = 'OS-'+new Date().getFullYear()+'-'+String(DB.ordens.length+1).padStart(4,'0');
+  var num = genOSNum();
   DB.ordens.push({
     id:'os-'+Date.now(), num, contId, cliNome:cont.cliNome,
     desc:'Contrato '+cont.num+' — '+(cont.desc||'').substring(0,50),
@@ -32235,6 +32659,7 @@ function buildAllAlerts() {
     }
   });
 
+  if (typeof div_alertasTopbar === 'function') alertas = alertas.concat(div_alertasTopbar());
   return alertas;
 }
 
@@ -34014,36 +34439,6 @@ function selecionarCombinacao(idxList) {
     if (chk) chk.checked = true;
   });
   updateCRSelecao();
-  // Scroll to table
-  var bar = g('cr-selecao-bar');
-  if (bar) bar.scrollIntoView({ behavior:'smooth', block:'nearest' });
-
-
-
-
-
-
-
-CRSelecao();
-  // Scroll to table
-
-
-
-
-
-
-
-
-  var bar = g('cr-selecao-bar');
-  if (bar) bar.scrollIntoView({ behavior:'smooth', block:'nearest' });
-
-
-
-
-
-
-
-CRSelecao();
   // Scroll to table
   var bar = g('cr-selecao-bar');
   if (bar) bar.scrollIntoView({ behavior:'smooth', block:'nearest' });

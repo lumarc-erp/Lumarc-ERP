@@ -7051,7 +7051,7 @@ function genOrcNum(peek) {
   // O contador vem SOMENTE de dados que sincronizam entre as máquinas
   // (config.orcSeq + orçamentos existentes). O contador antigo em
   // localStorage era por computador e fazia cada máquina numerar diferente.
-  var seq = 1;
+  var seq = parseInt(DB.config.orcSeq || 0) + 1; // marca d'água sincronizada entre máquinas
   (DB.orcamentos || []).forEach(function(o) {
     var m = o.num ? String(o.num).match(/^ORC-\d{4}-(\d+)$/) : null;
     if (m) { var n = parseInt(m[1]); if (n >= seq) seq = n + 1; }
@@ -7067,41 +7067,54 @@ function genOrcNum(peek) {
 // máquinas antes de incrementar o sequencial — elimina a colisão de números
 // quando dois usuários criam orçamentos simultaneamente.
 async function orcPullNuvem() {
-  if (cloudCfg.apiKey) {
-    try {
-      var resp = await fetch(JSONBIN_BASE + '/b/' + cloudCfg.binId + '/latest', {
-        headers: { 'X-Master-Key': cloudCfg.apiKey }
+  var r = { ok: false, motivo: '' };
+  if (!cloudCfg.apiKey) { r.motivo = 'sem chave da nuvem'; return r; }
+  try {
+    var resp = await fetch(JSONBIN_BASE + '/b/' + cloudCfg.binId + '/latest', {
+      headers: { 'X-Master-Key': cloudCfg.apiKey }
+    });
+    if (!resp.ok) { r.motivo = 'nuvem respondeu ' + resp.status; return r; }
+    var data = await resp.json();
+    if (data.record && !data.record._init) {
+      // Traz só orçamentos e a sequência — não aplica o payload inteiro,
+      // para não sobrescrever edições em andamento.
+      if (!DB.orcamentos) DB.orcamentos = [];
+      (data.record.orcamentos || []).forEach(function(o) {
+        var existe = DB.orcamentos.some(function(local){ return local.num === o.num; });
+        if (!existe) DB.orcamentos.push(o);
       });
-      if (resp.ok) {
-        var data = await resp.json();
-        if (data.record && !data.record._init) {
-          // Atualiza apenas a lista de orçamentos e a sequência — não aplica
-          // o payload inteiro para não sobrescrever edições em andamento.
-          if (data.record.orcamentos && data.record.orcamentos.length) {
-            data.record.orcamentos.forEach(function(o) {
-              var existe = (DB.orcamentos||[]).some(function(local){ return local.num === o.num; });
-              if (!existe) { if (!DB.orcamentos) DB.orcamentos = []; DB.orcamentos.push(o); }
-            });
-          }
-          if (data.record.config && data.record.config.orcSeq) {
-            if (!DB.config) DB.config = {};
-            DB.config.orcSeq = Math.max(DB.config.orcSeq||0, data.record.config.orcSeq);
-          }
-        }
+      if (data.record.config && data.record.config.orcSeq) {
+        if (!DB.config) DB.config = {};
+        DB.config.orcSeq = Math.max(DB.config.orcSeq||0, data.record.config.orcSeq);
       }
-    } catch(e) {
-      // Falha de rede ou rate-limit — continua com o estado local.
-      // Risco mínimo: só ocorre se as duas máquinas criarem um orçamento
-      // no exato mesmo segundo E a rede falhar simultaneamente.
-      console.warn('[OrcNum] Pull pré-geração falhou, usando estado local:', e.message);
     }
+    r.ok = true;
+  } catch(e) {
+    r.motivo = e && e.message ? e.message : 'falha de rede';
+    console.warn('[OrcNum] Pull pré-geração falhou, usando estado local:', r.motivo);
   }
+  return r;
+}
+
+// Mostra, abaixo do campo Número, se a numeração foi conferida na nuvem.
+function orcMostrarStatusNuvem(r) {
+  var inp = g('o-num'); if (!inp) return;
+  var el = g('o-num-nuvem');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'o-num-nuvem';
+    el.style.cssText = 'font-size:10.5px;margin-top:3px';
+    inp.parentNode.appendChild(el);
+  }
+  if (r && r.ok) { el.style.color = 'var(--green)'; el.textContent = '☁️ Numeração conferida com a nuvem'; }
+  else { el.style.color = 'var(--orange)'; el.textContent = '⚠️ Sem conexão com a nuvem (' + ((r && r.motivo) || 'indisponível') + ') — o número pode coincidir com o de outro usuário'; }
 }
 
 async function genOrcNumSeguro() {
   // Só PROPÕE o próximo número (não consome). O número definitivo é o do
   // momento em que o orçamento é salvo (ver salvarOrcamento).
-  await orcPullNuvem();
+  var r = await orcPullNuvem();
+  orcMostrarStatusNuvem(r);
   return genOrcNum(true);
 }
 
@@ -18776,6 +18789,20 @@ async function rel_imprimir(jaEmitido) {
   setTimeout(function () { w.print(); }, 700);
 }
 
+// Mantém o número SUGERIDO em dia enquanto o formulário é um orçamento novo
+// ainda intocado (o boot calcula antes da sincronização com a nuvem terminar).
+setInterval(function() {
+  try {
+    var inp = g('o-num'); if (!inp || !inp.value) return;
+    if (_orcDirty) return;
+    var num = inp.value.trim();
+    if ((DB.orcamentos || []).some(function(o) { return o.num === num; })) return; // é um orçamento salvo
+    if (typeof activeTabId !== 'undefined' && activeTabId !== 'tab-orc') return;
+    var novo = genOrcNum(true);
+    if (novo !== num) inp.value = novo;
+  } catch (e) {}
+}, 4000);
+
 // ── Diagnóstico de numeração duplicada de orçamentos ──
 function orcNumerosDuplicados() {
   var cont = {};
@@ -18990,7 +19017,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-11-16T18:00:00Z';
+const APP_BUILD_VERSION = '2026-11-16T19:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
@@ -22697,7 +22724,8 @@ function salvarOrcamento() {
   return Promise.race([
     orcPullNuvem(),
     new Promise(function(resolve) { setTimeout(resolve, 6000); })
-  ]).catch(function() {}).then(function() {
+  ]).catch(function() { return { ok: false, motivo: 'tempo esgotado' }; }).then(function(r) {
+    if (!r || !r.ok) showToast('⚠️ Não foi possível conferir a numeração na nuvem agora. Confira os números repetidos depois de sincronizar.', 'warn');
     var colide = (DB.orcamentos || []).some(function(o) { return o.num === num; });
     if (colide) {
       var novo = genOrcNum(true);
@@ -22783,6 +22811,10 @@ function _salvarOrcamentoCore() {
   if (typeof renderOrcamentosTab === 'function') renderOrcamentosTab();
   localStorage.removeItem('lumarc_rascunho_autosave');
   clearOrcDirty();
+  try {
+    var _mm = String(g('o-num') ? g('o-num').value : '').match(/^ORC-\d{4}-(\d+)$/);
+    if (_mm) { DB.config = DB.config || {}; DB.config.orcSeq = Math.max(parseInt(DB.config.orcSeq||0), parseInt(_mm[1])); }
+  } catch(e) {}
 }
 
 

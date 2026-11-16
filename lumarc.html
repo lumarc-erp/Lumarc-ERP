@@ -7089,6 +7089,14 @@ async function orcPullNuvem() {
       }
     }
     r.ok = true;
+    r.bin = String(cloudCfg.binId || '').slice(-6);
+    r.binOk = (cloudCfg.binId === JSONBIN_BIN_ID);
+    r.qtd = data.record && data.record.orcamentos ? data.record.orcamentos.length : 0;
+    r.seq = data.record && data.record.config ? (data.record.config.orcSeq || 0) : 0;
+    r.maxNuvem = 0;
+    ((data.record && data.record.orcamentos) || []).forEach(function(o) {
+      var m = String(o.num || '').match(/^ORC-\d{4}-(\d+)$/); if (m) r.maxNuvem = Math.max(r.maxNuvem, parseInt(m[1]));
+    });
   } catch(e) {
     r.motivo = e && e.message ? e.message : 'falha de rede';
     console.warn('[OrcNum] Pull pré-geração falhou, usando estado local:', r.motivo);
@@ -7106,7 +7114,12 @@ function orcMostrarStatusNuvem(r) {
     el.style.cssText = 'font-size:10.5px;margin-top:3px';
     inp.parentNode.appendChild(el);
   }
-  if (r && r.ok) { el.style.color = 'var(--green)'; el.textContent = '☁️ Numeração conferida com a nuvem'; }
+  if (r && r.ok && r.binOk === false) {
+    el.style.color = 'var(--red)';
+    el.innerHTML = '🚨 Este computador está ligado a OUTRA base na nuvem (…' + r.bin + '), diferente da base da empresa (…' + String(JSONBIN_BIN_ID).slice(-6) + '). Por isso a numeração não bate com a dos colegas. '
+      + '<a href="#" onclick="orcUsarBaseEmpresa();return false" style="color:var(--red);font-weight:700;text-decoration:underline">Usar a base da empresa</a>';
+  }
+  else if (r && r.ok) { el.style.color = 'var(--green)'; el.textContent = '☁️ Nuvem conferida · base …' + r.bin + ' · ' + r.qtd + ' orçamento(s) · maior nº na nuvem: ' + (r.maxNuvem || '—') + ' · contador: ' + (r.seq || '—'); }
   else { el.style.color = 'var(--orange)'; el.textContent = '⚠️ Sem conexão com a nuvem (' + ((r && r.motivo) || 'indisponível') + ') — o número pode coincidir com o de outro usuário'; }
 }
 
@@ -18789,6 +18802,18 @@ async function rel_imprimir(jaEmitido) {
   setTimeout(function () { w.print(); }, 700);
 }
 
+function orcUsarBaseEmpresa() {
+  if (!confirm('Ligar este computador à base da empresa na nuvem? Seus dados locais NÃO serão apagados: eles serão mesclados com os da base da empresa.')) return;
+  try {
+    cloudCfg.binId = JSONBIN_BIN_ID;
+    var cfg = JSON.stringify({ apiKey: cloudCfg.apiKey, binId: JSONBIN_BIN_ID, autosave: cloudCfg.autosave !== false, autoload: cloudCfg.autoload !== false });
+    ['lumarc_cloud_cfg_v2', 'lumarc_cloud_cfg'].forEach(function(k) { try { localStorage.setItem(k, cfg); } catch (e) {} });
+    try { sessionStorage.setItem('lumarc_cloud_cfg', cfg); } catch (e) {}
+  } catch (e) {}
+  showToast('✅ Ligado à base da empresa. Recarregando...');
+  setTimeout(function() { location.reload(); }, 800);
+}
+
 // Mantém o número SUGERIDO em dia enquanto o formulário é um orçamento novo
 // ainda intocado (o boot calcula antes da sincronização com a nuvem terminar).
 setInterval(function() {
@@ -19017,7 +19042,7 @@ function fin2_limparFolhaAutoNaoPaga() {
   return rm;
 }
 
-const APP_BUILD_VERSION = '2026-11-16T19:00:00Z';
+const APP_BUILD_VERSION = '2026-11-16T20:00:00Z';
 
 async function verificarVersaoAtualizada() {
   try {
